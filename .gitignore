@@ -16,3 +16,6 @@ dataset/check_files/
 dataset/add_missing_files.py
 
 baseline/*predictions*
+
+# Generated data by source separation
+dataset/metadata/eval/generated

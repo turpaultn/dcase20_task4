@@ -12,8 +12,11 @@ import pandas as pd
 import torch
 
 import config as cfg
-from utils.Logger import LOG
+from utils.Logger import create_logger
 from utils.utils import ManyHotEncoder, to_cuda_if_available
+
+
+logger = create_logger(__name__)
 
 
 def get_f_measure_by_class(torch_model, nb_tags, dataloader_, thresholds_=None):
@@ -200,50 +203,54 @@ def macro_f_measure(tp, fp, fn):
     return macro_f_score
 
 
-def get_predictions(model, valid_dataset, decoder, pooling_time_ratio=1, save_predictions=None):
-    for i, (input, _) in enumerate(valid_dataset):
-        [input] = to_cuda_if_available([input])
+def get_predictions(model, valid_dataloader, decoder, pooling_time_ratio=1, save_predictions=None):
+    prediction_df = pd.DataFrame()
+    for i, ((input, _), indexes) in enumerate(valid_dataloader):
+        indexes = indexes.numpy()
+        input = to_cuda_if_available(input)
 
-        pred_strong, _ = model(input.unsqueeze(0))
+        pred_strong, _ = model(input)
         pred_strong = pred_strong.cpu()
-        pred_strong = pred_strong.squeeze(0).detach().numpy()
+        pred_strong = pred_strong.detach().numpy()
         if i == 0:
-            LOG.debug(pred_strong)
-        pred_strong = ProbabilityEncoder().binarization(pred_strong, binarization_type="global_threshold",
-                                                        threshold=0.5)
-        pred_strong = scipy.ndimage.filters.median_filter(pred_strong, (cfg.median_window, 1))
-        pred = decoder(pred_strong)
-        pred = pd.DataFrame(pred, columns=["event_label", "onset", "offset"])
-        pred["filename"] = valid_dataset.filenames.iloc[i]
-        if i == 0:
-            LOG.debug("predictions: \n{}".format(pred))
-            LOG.debug("predictions strong: \n{}".format(pred_strong))
-            prediction_df = pred.copy()
-        else:
+            logger.debug(pred_strong)
+
+        for j, pred_strong_it in enumerate(pred_strong):
+            pred_strong_it = ProbabilityEncoder().binarization(pred_strong_it, binarization_type="global_threshold",
+                                                               threshold=0.5)
+            pred_strong_it = scipy.ndimage.filters.median_filter(pred_strong_it, (cfg.median_window, 1))
+            pred = decoder(pred_strong_it)
+            pred = pd.DataFrame(pred, columns=["event_label", "onset", "offset"])
+            pred["filename"] = valid_dataloader.dataset.filenames.iloc[indexes[j]]
             prediction_df = prediction_df.append(pred)
+
+            if i == 0 and j == 0:
+                logger.debug("predictions: \n{}".format(pred))
+                logger.debug("predictions strong: \n{}".format(pred_strong_it))
 
     # In seconds
     prediction_df.onset = prediction_df.onset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
     prediction_df.offset = prediction_df.offset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
+    prediction_df = prediction_df.reset_index(drop=True)
     if save_predictions is not None:
-        LOG.info("Saving predictions at: {}".format(save_predictions))
-        prediction_df.to_csv(save_predictions, index=False, sep="\t")
+        logger.info("Saving predictions at: {}".format(save_predictions))
+        prediction_df.to_csv(save_predictions, index=False, sep="\t", float_format="%.3f")
     return prediction_df
 
 
-def compute_strong_metrics(predictions, valid_df, pooling_time_ratio=None):
+def compute_strong_metrics(predictions, groundtruth, pooling_time_ratio=None):
     if pooling_time_ratio is not None:
-        LOG.warning("pooling_time_ratio is deprecated, use it in get_predictions() instead.")
+        logger.warning("pooling_time_ratio is deprecated, use it in get_predictions() instead.")
         # In seconds
         predictions.onset = predictions.onset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
         predictions.offset = predictions.offset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
 
-    metric_event = event_based_evaluation_df(valid_df, predictions, t_collar=0.200,
-                                                      percentage_of_length=0.2)
-    metric_segment = segment_based_evaluation_df(valid_df, predictions, time_resolution=1.)
-    LOG.info(metric_event)
-    LOG.info(metric_segment)
-    return metric_event
+    metric_event = event_based_evaluation_df(groundtruth, predictions, t_collar=0.200,
+                                             percentage_of_length=0.2)
+    metric_segment = segment_based_evaluation_df(groundtruth, predictions, time_resolution=1.)
+    logger.info(metric_event)
+    logger.info(metric_segment)
+    return metric_event, metric_segment
 
 
 def format_df(df, mhe):

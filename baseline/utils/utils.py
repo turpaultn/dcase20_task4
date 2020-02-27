@@ -7,10 +7,14 @@
 #########################################################################
 from __future__ import print_function
 
+import glob
+import warnings
+
 import numpy as np
 import pandas as pd
 import soundfile
 import os
+import os.path as osp
 import librosa
 import torch
 from torch import nn
@@ -193,15 +197,6 @@ def read_audio(path, target_fs=None):
     return audio, fs
 
 
-def create_folder(fd):
-    """ Create folders of a path if not exists
-    Args:
-        fd: str, path to the folder to create
-    """
-    if not os.path.exists(fd):
-        os.makedirs(fd)
-
-
 def weights_init(m):
     """ Initialize the weights of some layers of neural networks, here Conv2D, BatchNorm, GRU, Linear
         Based on the work of Xavier Glorot
@@ -224,19 +219,21 @@ def weights_init(m):
         m.bias.data.zero_()
 
 
-def to_cuda_if_available(list_args):
+def to_cuda_if_available(*args):
     """ Transfer object (Module, Tensor) to GPU if GPU available
     Args:
-        list_args: list, list of objects to put on cuda if available
+        args: torch object to put on cuda if available (needs to have object.cuda() defined)
 
     Returns:
-        list
         Objects on GPU if GPUs available
     """
+    res = list(args)
     if torch.cuda.is_available():
-        for i in range(len(list_args)):
-            list_args[i] = list_args[i].cuda()
-    return list_args
+        for i, torch_obj in enumerate(args):
+            res[i] = torch_obj.cuda()
+    if len(res) == 1:
+        return res[0]
+    return res
 
 
 class SaveBest:
@@ -410,3 +407,45 @@ def get_transforms(frames, scaler=None, add_axis_conv=True, augment_type=None):
         transf.append(Normalize(scaler=scaler))
 
     return Compose(transf)
+
+
+def generate_tsv_wav_durations(audio_dir, out_tsv):
+    meta_list = []
+    for file in glob.glob(os.path.join(audio_dir, "*.wav")):
+        d = soundfile.info(file).duration
+        meta_list.append([os.path.basename(file), d])
+    meta_df = pd.DataFrame(meta_list, columns=["filename", "duration"])
+    if out_tsv is not None:
+        meta_df.to_csv(out_tsv, sep="\t", index=False, float_format="%.1f")
+    return meta_df
+
+
+def generate_tsv_from_isolated_events(wav_folder, out_tsv=None):
+    """ Generate list of separated wav files in a folder and export them in a tsv file
+    Separated audio files considered are all wav files in 'subdirectories' of the 'wav_folder'
+    :param wav_folder: str, path of the folder containing subdirectories (one for each mixture separated)
+    :param out_tsv: str, path of the csv in which to save the list of files
+    :return: pd.DataFrame, having only one columnd with the filename considered
+    """
+    source_sep_df = pd.DataFrame()
+    list_dirs = [d for d in os.listdir(wav_folder) if osp.isdir(osp.join(wav_folder, d))]
+    for dirname in list_dirs:
+        list_isolated_files = []
+        for dir, subdir, fnames in os.walk(osp.join(wav_folder, dirname)):
+            for fname in fnames:
+                if osp.splitext(fname)[1] in [".wav"]:
+                    # Get the level folders and keep it in the tsv
+                    subfolder = dir.split(dirname + os.sep)[1:]
+                    if len(subfolder)> 0:
+                        subdirs = osp.join(*subfolder)
+                    else:
+                        subdirs = ""
+                    # Append the subfolders and name in the list of files
+                    list_isolated_files.append(osp.join(dirname, subdirs, fname))
+                else:
+                    warnings.warn(f"Not only wav audio files in the separated source folder,"
+                                  f"{fname} not added to the .tsv file")
+        source_sep_df = source_sep_df.append(pd.DataFrame(list_isolated_files, columns=["filename"]))
+    if out_tsv is not None:
+        source_sep_df.to_csv(out_tsv, sep="\t", index=False, float_format="%.3f")
+    return source_sep_df

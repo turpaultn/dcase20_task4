@@ -16,14 +16,16 @@ import warnings
 from torch.utils.data import Dataset
 from torch.utils.data.sampler import Sampler
 
-from utils.Logger import LOG
+from utils.Logger import create_logger
+
 
 torch.manual_seed(0)
 random.seed(0)
+logger = create_logger(__name__)
 
 
 class DataLoadDf(Dataset):
-    """ Class derived from pytorch Dataset
+    """ Class derived from pytorch DESED
     Prepare the data to be use in a batch mode
 
     Args:
@@ -108,7 +110,7 @@ class DataLoadDf(Dataset):
                     "'filename', 'event_labels' for weak labels; 'filename' 'onset' 'offset' 'event_label' "
                     "for strong labels, yours: {}".format(self.df.columns))
         if index == 0:
-            LOG.debug("label to encode: {}".format(label))
+            logger.debug("label to encode: {}".format(label))
         if self.encode_function is not None:
             # labels are a list of string or list of list [[label, onset, offset]]
             y = self.encode_function(label)
@@ -154,7 +156,46 @@ class DataLoadDf(Dataset):
         return DataLoadDf(self.df, self.get_feature_file_func, self.encode_function, transforms, self.return_indexes)
 
 
-class GaussianNoise:
+class Transform:
+    def transform_data(self, data):
+        # Mandatory to be defined by subclasses
+        raise NotImplementedError("Abstract object")
+
+    def transform_label(self, label):
+        # Do nothing, to be changed in subclasses if needed
+        return label
+
+    def _apply_transform(self, sample_no_index):
+        data, label = sample_no_index
+        if type(data) is tuple:  # meaning there is more than one data_input (could be duet, triplet...)
+            data = list(data)
+            for k in range(len(data) - 1):
+                data[k] = self.transform_data(data[k])
+            data = tuple(data)
+        else:
+            data = self.transform_data(data)
+        label = self.transform_label(label)
+        return data, label
+
+    def __call__(self, sample):
+        """ Apply the transformation
+        Args:
+            sample: tuple, a sample defined by a DataLoad class
+
+        Returns:
+            tuple
+            The transformed tuple
+        """
+        if type(sample[0]) is tuple:  # Means there is an index, may be another way to make it cleaner
+            sample_data, index = sample
+            sample_data = self._apply_transform(sample_data)
+            sample = sample_data, index
+        else:
+            sample = self._apply_transform(sample)
+        return sample
+
+
+class GaussianNoise(Transform):
     """ Apply gaussian noise
         Args:
             mean: float, the mean of the gaussian distribution.
@@ -168,43 +209,31 @@ class GaussianNoise:
         self.mean = mean
         self.std = std
 
-    def __call__(self, sample):
-        """ Apply the transformation
+    def transform_data(self, data):
+        """ Apply the transformation on data
         Args:
-            sample: tuple or list, a sample defined by a DataLoad class
+            data: np.array, the data to be modified
 
         Returns:
-            list
-            The transformed tuple
+            np.array
+            The transformed data
         """
-        if type(sample) is tuple:
-            sample = list(sample)
-        # sample must be a tuple or a list, not apply on labels
-        for k in range(len(sample) - 1):
-            sample[k] = sample[k] + np.abs(np.random.normal(0, 0.5 ** 2, sample[k].shape))
-
-        return sample
+        return data + np.abs(np.random.normal(0, 0.5 ** 2, data.shape))
 
 
-class ApplyLog(object):
+class ApplyLog(Transform):
     """Convert ndarrays in sample to Tensors."""
 
-    def __call__(self, sample):
-        """ Apply the transformation
+    def transform_data(self, data):
+        """ Apply the transformation on data
         Args:
-
-        sample: tuple, a sample defined by a DataLoad class
+            data: np.array, the data to be modified
 
         Returns:
-            tuple
-            The transformed tuple
+            np.array
+            The transformed data
         """
-        # sample must be a tuple or a list, first parts are input, then last element is label
-        if type(sample) is tuple:
-            sample = list(sample)
-        for i in range(len(sample) - 1):
-            sample[i] = librosa.amplitude_to_db(sample[i].T).T
-        return sample
+        return librosa.amplitude_to_db(data.T).T
 
 
 def pad_trunc_seq(x, max_len):
@@ -230,7 +259,7 @@ def pad_trunc_seq(x, max_len):
     return x_new
 
 
-class PadOrTrunc:
+class PadOrTrunc(Transform):
     """ Pad or truncate a sequence given a number of frames
     Args:
         nb_frames: int, the number of frames to match
@@ -238,28 +267,29 @@ class PadOrTrunc:
         nb_frames: int, the number of frames to match
     """
 
-    def __init__(self, nb_frames):
+    def __init__(self, nb_frames, apply_to_label=False):
         self.nb_frames = nb_frames
+        self.apply_to_label = apply_to_label
 
-    def __call__(self, sample):
-        """ Apply the transformation
+    def transform_label(self, label):
+        if self.apply_to_label:
+            return pad_trunc_seq(label, self.nb_frames)
+        else:
+            return label
+
+    def transform_data(self, data):
+        """ Apply the transformation on data
         Args:
-            sample: tuple or list, a sample defined by a DataLoad class
+            data: np.array, the data to be modified
 
         Returns:
-            list
-            The transformed tuple
+            np.array
+            The transformed data
         """
-        if type(sample) is tuple:
-            sample = list(sample)
-        # sample must be a tuple or a list
-        for k in range(len(sample) - 1):
-            sample[k] = pad_trunc_seq(sample[k], self.nb_frames)
-
-        return sample
+        return pad_trunc_seq(data, self.nb_frames)
 
 
-class AugmentGaussianNoise:
+class AugmentGaussianNoise(Transform):
     """ Pad or truncate a sequence given a number of frames
            Args:
                mean: float, mean of the Gaussian noise to add
@@ -271,23 +301,20 @@ class AugmentGaussianNoise:
         self.mean = mean
         self.std = std
 
-    def __call__(self, sample):
-        """ Apply the transformation
-        Args:
-            sample: tuple or list, a sample defined by a DataLoad class
+    def transform_data(self, data):
+        """ Apply the transformation on data
+            Args:
+                data: np.array, the data to be modified
 
-        Returns:
-            list
-            The transformed tuple
+            Returns:
+                (np.array, np.array)
+                (original data, noise applied to original data)
         """
-        sample, label = sample
-
-        noise = sample + np.abs(np.random.normal(0, 0.5 ** 2, sample.shape))
-
-        return sample, noise, label
+        noise = data + np.abs(np.random.normal(0, 0.5 ** 2, data.shape))
+        return data, noise
 
 
-class ToTensor(object):
+class ToTensor(Transform):
     """Convert ndarrays in sample to Tensors.
     Args:
         unsqueeze_axis: int, (Default value = None) add an dimension to the axis mentioned.
@@ -299,29 +326,25 @@ class ToTensor(object):
     def __init__(self, unsqueeze_axis=None):
         self.unsqueeze_axis = unsqueeze_axis
 
-    def __call__(self, sample):
-        """ Apply the transformation
-        Args:
-            sample : tuple or list, a sample defined by a DataLoad class
+    def transform_data(self, data):
+        """ Apply the transformation on data
+            Args:
+                data: np.array, the data to be modified
 
-        Returns:
-            list
-            The transformed tuple
+            Returns:
+                np.array
+                The transformed data
         """
-        if type(sample) is tuple:
-            sample = list(sample)
-        # sample must be a tuple or a list, first parts are input, then last element is label
-        for i in range(len(sample)):
-            sample[i] = torch.from_numpy(sample[i]).float()  # even labels (we don't loop until -1)
+        res_data = torch.from_numpy(data).float()
+        if self.unsqueeze_axis is not None:
+            res_data = res_data.unsqueeze(self.unsqueeze_axis)
+        return res_data
 
-        for i in range(len(sample) - 1):
-            if self.unsqueeze_axis is not None:
-                sample[i] = sample[i].unsqueeze(self.unsqueeze_axis)
-
-        return sample
+    def transform_label(self, label):
+        return torch.from_numpy(label)
 
 
-class Normalize(object):
+class Normalize(Transform):
     """Normalize inputs
     Args:
         scaler: Scaler object, the scaler to be used to normalize the data
@@ -332,22 +355,16 @@ class Normalize(object):
     def __init__(self, scaler):
         self.scaler = scaler
 
-    def __call__(self, sample):
-        """ Apply the transformation
-        Args:
-            sample: tuple or list, a sample defined by a DataLoad class
+    def transform_data(self, data):
+        """ Apply the transformation on data
+            Args:
+                data: np.array, the data to be modified
 
-        Returns:
-            list
-            The transformed tuple
+            Returns:
+                np.array
+                The transformed data
         """
-        if type(sample) is tuple:
-            sample = list(sample)
-        # sample must be a tuple or a list
-        for k in range(len(sample) - 1):
-            sample[k] = self.scaler.normalize(sample[k])
-
-        return sample
+        return self.scaler.normalize(data)
 
 
 class Compose(object):
@@ -382,7 +399,7 @@ class Compose(object):
 
 class ConcatDataset(Dataset):
     """
-    Dataset to concatenate multiple datasets.
+    DESED to concatenate multiple datasets.
     Purpose: useful to assemble different existing datasets, possibly
     large-scale datasets as the concatenation operation is done in an
     on-the-fly manner.
@@ -463,7 +480,7 @@ def random_split(dataset, lengths):
     Randomly split a dataset into non-overlapping new datasets of given lengths.
 
     Args:
-        dataset: Dataset, dataset to be split
+        dataset: DESED, dataset to be split
         lengths: sequence, lengths of splits to be produced
     """
     # if ratio > 1:
@@ -489,11 +506,11 @@ class ClusterRandomSampler(Sampler):
     """Takes a dataset with cluster_indices property, cuts it into batch-sized chunks
     Drops the extra items, not fitting into exact batches
     Args:
-        data_source : Dataset, a Dataset to sample from. Should have a cluster_indices property
+        data_source : DESED, a DESED to sample from. Should have a cluster_indices property
         batch_size : int, a batch size that you would like to use later with Dataloader class
         shuffle : bool, whether to shuffle the data or not
     Attributes:
-        data_source : Dataset, a Dataset to sample from. Should have a cluster_indices property
+        data_source : DESED, a DESED to sample from. Should have a cluster_indices property
         batch_size : int, a batch size that you would like to use later with Dataloader class
         shuffle : bool, whether to shuffle the data or not
     """
@@ -540,11 +557,11 @@ class MultiStreamBatchSampler(Sampler):
     """Takes a dataset with cluster_indices property, cuts it into batch-sized chunks
     Drops the extra items, not fitting into exact batches
     Args:
-        data_source : Dataset, a Dataset to sample from. Should have a cluster_indices property
+        data_source : DESED, a DESED to sample from. Should have a cluster_indices property
         batch_size : int, a batch size that you would like to use later with Dataloader class
         shuffle : bool, whether to shuffle the data or not
     Attributes:
-        data_source : Dataset, a Dataset to sample from. Should have a cluster_indices property
+        data_source : DESED, a DESED to sample from. Should have a cluster_indices property
         batch_size : int, a batch size that you would like to use later with Dataloader class
         shuffle : bool, whether to shuffle the data or not
     """

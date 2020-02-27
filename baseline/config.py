@@ -3,7 +3,7 @@ import os
 import pandas as pd
 
 workspace = ".."
-# Dataset Paths
+# DESED Paths
 weak = 'dataset/metadata/train/weak.tsv'
 unlabel = 'dataset/metadata/train/unlabel_in_domain.tsv'
 synthetic = 'dataset/metadata/train/synthetic.tsv'
@@ -11,6 +11,8 @@ validation = 'dataset/metadata/validation/validation.tsv'
 test2018 = 'dataset/metadata/validation/test_dcase2018.tsv'
 eval2018 = 'dataset/metadata/validation/eval_dcase2018.tsv'
 eval_desed = "dataset/metadata/eval/public.tsv"
+
+audio_validation_dir = 'dataset/metadata/validation/'
 
 # config
 # prepare_data

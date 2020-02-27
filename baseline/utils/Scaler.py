@@ -3,7 +3,10 @@ import logging
 import numpy as np
 import torch
 import json
-from utils.Logger import LOG
+from utils.Logger import create_logger
+
+
+logger = create_logger(__name__)
 
 
 class Scaler(object):
@@ -36,7 +39,7 @@ class Scaler(object):
        Splits a dataset in to train test validation.
        :param dataset: dataset, from DataLoad class, each sample is an (X, y) tuple.
        """
-        LOG.info('computing mean')
+        logger.info('computing mean')
         start = time.time()
 
         shape = None
@@ -83,7 +86,7 @@ class Scaler(object):
         #     mean = mean * (1 - weight) + self.mean(X, axis=-1) * weight
         #     mean_of_square = mean_of_square * (1 - weight) + self.mean(data_square, axis=-1) * weight
 
-        LOG.debug('time to compute means: ' + str(time.time() - start))
+        logger.debug('time to compute means: ' + str(time.time() - start))
         return self
 
     def std(self, variance):
@@ -128,3 +131,62 @@ class Scaler(object):
         self.mean_of_square_ = np.array(state_dict["mean_of_square_"])
         variance = self.variance(self.mean_, self.mean_of_square_)
         self.std_ = self.std(variance)
+
+
+class ScalerPerAudio(object):
+    """Normalize inputs one by one
+        Args:
+            normalization: str, in {"global", "per_channel"}
+            type: str, in {"mean", "max"}
+        """
+
+    def __init__(self, normalization="global", type_norm="mean"):
+        self.normalization = normalization
+        self.type_norm = type_norm
+
+    def normalize(self, spectrogram):
+        """ Apply the transformation on data
+            Args:
+                spectrogram: np.array, the data to be modified
+
+            Returns:
+                np.array
+                The transformed data
+        """
+        if type(spectrogram) is torch.Tensor:
+            tensor = True
+            spectrogram = spectrogram.numpy()
+        else:
+            tensor = False
+
+        if self.normalization == "global":
+            if self.type_norm == "mean":
+                res_data = (spectrogram - spectrogram.mean()) / spectrogram.std()
+            elif self.type_norm == "max":
+                res_data = spectrogram - spectrogram.max()
+            else:
+                raise NotImplementedError("No other type_norm implemented except {'mean', 'max'}")
+
+        elif self.normalization == "per_channel":
+            if self.type_norm == "mean":
+                res_data = (spectrogram - spectrogram.mean(0)) / spectrogram.std(0)
+            elif self.type_norm == "max":
+                res_data = spectrogram - spectrogram.max(0)
+            else:
+                raise NotImplementedError("No other normalization implemented except {'global', 'per_channel'}")
+
+        if tensor:
+            res_data = torch.Tensor(res_data)
+        return res_data
+
+    def state_dict(self):
+        pass
+
+    def save(self, path):
+        pass
+
+    def load(self, path):
+        pass
+
+    def load_state_dict(self, state_dict):
+        pass
