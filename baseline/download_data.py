@@ -19,9 +19,11 @@ from contextlib import closing
 from multiprocessing import Pool
 import functools
 import shutil
-from utils.Logger import LOG
+from utils.Logger import create_logger
+
 
 TMP_FOLDER = "tmp/"
+logger = create_logger(__name__)
 
 
 def download_file(result_dir, filename):
@@ -41,7 +43,7 @@ def download_file(result_dir, filename):
     list : list, Empty list if the file is downloaded, otherwise contains the filename and the error associated
 
     """
-    LOG.debug(filename)
+    logger.debug(filename)
     tmp_filename = ""
     query_id = filename[1:12]
     segment_start = filename[13:-4].split('_')[0]
@@ -104,8 +106,8 @@ def download_file(result_dir, filename):
     except IndexError as e:
         if os.path.exists(tmp_filename):
             os.remove(tmp_filename)
-        LOG.info(filename)
-        LOG.info(str(e))
+        logger.info(filename)
+        logger.info(str(e))
         return [filename, "Index Error"]
 
 
@@ -194,10 +196,10 @@ if __name__ == "__main__":
     base_missing_files_folder = ".."
     dataset_folder = os.path.join("..", "dataset")
 
-    LOG.info("Download_data")
-    LOG.info("\n\nOnce database is downloaded, do not forget to check your missing_files\n\n")
+    logger.info("Download_data")
+    logger.info("\n\nOnce database is downloaded, do not forget to check your missing_files\n\n")
 
-    LOG.info("You can change N_JOBS and CHUNK_SIZE to increase the download with more processes.")
+    logger.info("You can change N_JOBS and CHUNK_SIZE to increase the download with more processes.")
     # Modify it with the number of process you want, but be careful, youtube can block you if you put too many.
     N_JOBS = 3
 
@@ -205,7 +207,7 @@ if __name__ == "__main__":
     # if chunk_size is high, download is faster. Be careful, progress bar only update after each chunk.
     CHUNK_SIZE = 10
 
-    LOG.info("Validation data")
+    logger.info("Validation data")
     test = os.path.join(dataset_folder, "metadata", "validation", "validation.tsv")
     result_dir = os.path.join(dataset_folder, "audio", "validation")
     # read metadata file and get only one filename once
@@ -214,7 +216,7 @@ if __name__ == "__main__":
     download(filenames_test, result_dir, n_jobs=N_JOBS, chunk_size=CHUNK_SIZE,
              base_dir_missing_files=base_missing_files_folder)
 
-    LOG.info("Train, weak data")
+    logger.info("Train, weak data")
     train_weak = os.path.join(dataset_folder, "metadata", "train", "weak.tsv")
     result_dir = os.path.join(dataset_folder, "audio", "train", "weak")
     # read metadata file and get only one filename once
@@ -223,7 +225,7 @@ if __name__ == "__main__":
     download(filenames_weak, result_dir, n_jobs=N_JOBS, chunk_size=CHUNK_SIZE,
              base_dir_missing_files=base_missing_files_folder)
 
-    LOG.info("Train, unlabel in domain data")
+    logger.info("Train, unlabel in domain data")
     train_unlabel_in_domain = os.path.join(dataset_folder, "metadata", "train", "unlabel_in_domain.tsv")
     result_dir = os.path.join(dataset_folder, "audio", "train", "unlabel_in_domain")
     # read metadata file and get only one filename once
@@ -232,4 +234,4 @@ if __name__ == "__main__":
     download(filenames_unlabel_in_domain, result_dir, n_jobs=N_JOBS, chunk_size=CHUNK_SIZE,
              base_dir_missing_files=base_missing_files_folder)
 
-    LOG.info("###### DONE #######")
+    logger.info("###### DONE #######")

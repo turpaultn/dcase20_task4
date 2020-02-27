@@ -9,3 +9,5 @@ conda install -y ffmpeg -c conda-forge
 
 pip install dcase_util
 pip install sed-eval
+pip install psds_eval@git+https://github.com/audioanalytic/psds_eval
+pip install scaper
