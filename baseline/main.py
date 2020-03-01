@@ -16,17 +16,20 @@ import torch
 from torch.utils.data import DataLoader
 from torch import nn
 
-from utils import ramps
-from DatasetDcase2019Task4 import DatasetDcase2019Task4
+from Desed import DESED
 from DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler
-from utils.Scaler import Scaler
 from TestModel import test_model
 from evaluation_measures import get_f_measure_by_class, get_predictions, audio_tagging_results, compute_strong_metrics
 from models.CRNN import CRNN
 import config as cfg
-from utils.utils import ManyHotEncoder, create_folder, SaveBest, to_cuda_if_available, weights_init, \
+from utilities import ramps
+from utilities.Logger import create_logger
+from utilities.Scaler import Scaler
+from utilities.utils import ManyHotEncoder, SaveBest, to_cuda_if_available, weights_init, \
     get_transforms, AverageMeterSet
-from utils.Logger import LOG
+
+
+logger = create_logger(__name__)
 
 
 def adjust_learning_rate(optimizer, rampup_value, rampdown_value):
@@ -67,7 +70,7 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
 
     meters = AverageMeterSet()
 
-    LOG.debug("Nb batches: {}".format(len(train_loader)))
+    logger.debug("Nb batches: {}".format(len(train_loader)))
     start = time.time()
     rampup_length = len(train_loader) * cfg.n_epoch // 2
     for i, (batch_input, ema_batch_input, target) in enumerate(train_loader):
@@ -82,7 +85,7 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
         meters.update('lr', optimizer.param_groups[0]['lr'])
 
         [batch_input, ema_batch_input, target] = to_cuda_if_available([batch_input, ema_batch_input, target])
-        LOG.debug(batch_input.mean())
+        logger.debug(batch_input.mean())
         # Outputs
         strong_pred_ema, weak_pred_ema = ema_model(ema_batch_input)
         strong_pred_ema = strong_pred_ema.detach()
@@ -98,11 +101,11 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
             ema_class_loss = class_criterion(weak_pred_ema[weak_mask], target_weak[weak_mask])
 
             if i == 0:
-                LOG.debug("target: {}".format(target.mean(-2)))
-                LOG.debug("Target_weak: {}".format(target_weak))
-                LOG.debug("Target_weak mask: {}".format(target_weak[weak_mask]))
-                LOG.debug(weak_class_loss)
-                LOG.debug("rampup_value: {}".format(rampup_value))
+                logger.debug("target: {}".format(target.mean(-2)))
+                logger.debug("Target_weak: {}".format(target_weak))
+                logger.debug("Target_weak mask: {}".format(target_weak[weak_mask]))
+                logger.debug(weak_class_loss)
+                logger.debug("rampup_value: {}".format(rampup_value))
             meters.update('weak_class_loss', weak_class_loss.item())
 
             meters.update('Weak EMA loss', ema_class_loss.item())
@@ -158,7 +161,7 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
 
     epoch_time = time.time() - start
 
-    LOG.info(
+    logger.info(
         'Epoch: {}\t'
         'Time {:.2f}\t'
         '{meters}'.format(
@@ -166,7 +169,7 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
 
 
 if __name__ == '__main__':
-    LOG.info("MEAN TEACHER")
+    logger.info("MEAN TEACHER")
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("-s", '--subpart_data', type=int, default=None, dest="subpart_data",
                         help="Number of files to be used. Useful when testing on small number of files.")
@@ -177,8 +180,8 @@ if __name__ == '__main__':
 
     reduced_number_of_data = f_args.subpart_data
     no_synthetic = f_args.no_synthetic
-    LOG.info("subpart_data = {}".format(reduced_number_of_data))
-    LOG.info("Using synthetic data = {}".format(not no_synthetic))
+    logger.info("subpart_data = {}".format(reduced_number_of_data))
+    logger.info("Using synthetic data = {}".format(not no_synthetic))
 
     if no_synthetic:
         add_dir_model_name = "_no_synthetic"
@@ -188,23 +191,24 @@ if __name__ == '__main__':
     store_dir = os.path.join("stored_data", "MeanTeacher" + add_dir_model_name)
     saved_model_dir = os.path.join(store_dir, "model")
     saved_pred_dir = os.path.join(store_dir, "predictions")
-    create_folder(store_dir)
-    create_folder(saved_model_dir)
-    create_folder(saved_pred_dir)
+    os.makedirs(store_dir, exist_ok=True)
+    os.makedirs(saved_model_dir, exist_ok=True)
+    os.makedirs(saved_pred_dir, exist_ok=True)
 
     pooling_time_ratio = cfg.pooling_time_ratio  # --> Be careful, it depends of the model time axis pooling
     # ##############
     # DATA
     # ##############
-    dataset = DatasetDcase2019Task4(cfg.workspace,
-                                    base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
-                                    save_log_feature=False)
+    dataset = DESED(cfg.workspace,
+                    base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
+                    compute_log=False)
 
-    weak_df = dataset.initialize_and_get_df(cfg.weak, reduced_number_of_data)
-    unlabel_df = dataset.initialize_and_get_df(cfg.unlabel, reduced_number_of_data)
+    weak_df = dataset.initialize_and_get_df(cfg.weak, nb_files=reduced_number_of_data)
+    unlabel_df = dataset.initialize_and_get_df(cfg.unlabel, nb_files=reduced_number_of_data)
     # Event if synthetic not used for training, used on validation purpose
-    synthetic_df = dataset.initialize_and_get_df(cfg.synthetic, reduced_number_of_data, download=False)
-    validation_df = dataset.initialize_and_get_df(cfg.validation, reduced_number_of_data)
+    synthetic_df = dataset.initialize_and_get_df(cfg.synthetic, nb_files=reduced_number_of_data, download=False)
+    validation_df = dataset.initialize_and_get_df(cfg.validation, audio_dir=cfg.audio_validation_dir,
+                                                  nb_files=reduced_number_of_data)
 
     classes = cfg.classes
     many_hot_encoder = ManyHotEncoder(classes, n_frames=cfg.max_frames // pooling_time_ratio)
@@ -215,7 +219,7 @@ if __name__ == '__main__':
     train_weak_df = weak_df.sample(frac=0.8, random_state=26)
     valid_weak_df = weak_df.drop(train_weak_df.index).reset_index(drop=True)
     train_weak_df = train_weak_df.reset_index(drop=True)
-    LOG.debug(valid_weak_df.event_labels.value_counts())
+    logger.debug(valid_weak_df.event_labels.value_counts())
 
     # Divide synthetic in train and valid
     filenames_train = synthetic_df.filename.drop_duplicates().sample(frac=0.8, random_state=26)
@@ -226,7 +230,7 @@ if __name__ == '__main__':
     #  Not doing it for valid, because not using labels (when prediction) and event based metric expect sec.
     train_synth_df.onset = train_synth_df.onset * cfg.sample_rate // cfg.hop_length // pooling_time_ratio
     train_synth_df.offset = train_synth_df.offset * cfg.sample_rate // cfg.hop_length // pooling_time_ratio
-    LOG.debug(valid_synth_df.event_label.value_counts())
+    logger.debug(valid_synth_df.event_label.value_counts())
 
     train_weak_data = DataLoadDf(train_weak_df, dataset.get_feature_file, many_hot_encoder.encode_strong_df,
                                  transform=transforms)
@@ -249,7 +253,7 @@ if __name__ == '__main__':
     scaler = Scaler()
     scaler.calculate_scaler(ConcatDataset(list_dataset))
 
-    LOG.debug(scaler.mean_)
+    logger.debug(scaler.mean_)
 
     transforms = get_transforms(cfg.max_frames, scaler, augment_type="noise")
     for i in range(len(list_dataset)):
@@ -268,7 +272,8 @@ if __name__ == '__main__':
                                  transform=transforms_valid)
 
     # Eval 2018
-    eval_2018_df = dataset.initialize_and_get_df(cfg.eval2018, reduced_number_of_data)
+    eval_2018_df = dataset.initialize_and_get_df(cfg.eval2018, audio_dir=cfg.audio_validation_dir,
+                                                 nb_files=reduced_number_of_data)
     eval_2018 = DataLoadDf(eval_2018_df, dataset.get_feature_file, many_hot_encoder.encode_strong_df,
                            transform=transforms_valid)
 
@@ -281,7 +286,7 @@ if __name__ == '__main__':
 
     crnn.apply(weights_init)
     crnn_ema.apply(weights_init)
-    LOG.info(crnn)
+    logger.info(crnn)
 
     for param in crnn_ema.parameters():
         param.detach_()
@@ -322,17 +327,17 @@ if __name__ == '__main__':
         train(training_data, crnn, optimizer, epoch, ema_model=crnn_ema, weak_mask=weak_mask, strong_mask=strong_mask)
 
         crnn = crnn.eval()
-        LOG.info("\n ### Valid synthetic metric ### \n")
+        logger.info("\n ### Valid synthetic metric ### \n")
         predictions = get_predictions(crnn, valid_synth_data, many_hot_encoder.decode_strong, pooling_time_ratio,
                                       save_predictions=None)
         valid_events_metric = compute_strong_metrics(predictions, valid_synth_df)
 
-        LOG.info("\n ### Valid weak metric ### \n")
+        logger.info("\n ### Valid weak metric ### \n")
         weak_metric = get_f_measure_by_class(crnn, len(classes),
                                              DataLoader(valid_weak_data, batch_size=cfg.batch_size))
 
-        LOG.info("Weak F1-score per class: \n {}".format(pd.DataFrame(weak_metric * 100, many_hot_encoder.labels)))
-        LOG.info("Weak F1-score macro averaged: {}".format(np.mean(weak_metric)))
+        logger.info("Weak F1-score per class: \n {}".format(pd.DataFrame(weak_metric * 100, many_hot_encoder.labels)))
+        logger.info("Weak F1-score macro averaged: {}".format(np.mean(weak_metric)))
 
         state['model']['state_dict'] = crnn.state_dict()
         state['model_ema']['state_dict'] = crnn_ema.state_dict()
@@ -356,9 +361,9 @@ if __name__ == '__main__':
     if cfg.save_best:
         model_fname = os.path.join(saved_model_dir, "baseline_best")
         state = torch.load(model_fname)
-        LOG.info("testing model: {}".format(model_fname))
+        logger.info("testing model: {}".format(model_fname))
     else:
-        LOG.info("testing model of last epoch: {}".format(cfg.n_epoch))
+        logger.info("testing model of last epoch: {}".format(cfg.n_epoch))
 
     # ##############
     # Validation

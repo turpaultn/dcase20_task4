@@ -13,9 +13,9 @@ import time
 import pandas as pd
 
 import config as cfg
-from utils.Logger import create_logger
 from download_data import download
-from utils.utils import read_audio
+from utilities.Logger import create_logger
+from utilities.utils import read_audio
 
 
 logger = create_logger(__name__)

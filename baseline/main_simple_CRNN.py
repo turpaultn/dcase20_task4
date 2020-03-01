@@ -16,16 +16,19 @@ import torch
 from torch.utils.data import DataLoader
 from torch import nn
 
-from DatasetDcase2019Task4 import DatasetDcase2019Task4
+from Desed import DESED
 from DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler
-from utils.Scaler import Scaler
 from TestModel import test_model
 from evaluation_measures import get_f_measure_by_class, get_predictions, audio_tagging_results, compute_strong_metrics
 from models.CRNN import CRNN
 import config as cfg
-from utils.utils import ManyHotEncoder, AverageMeterSet, create_folder, SaveBest, to_cuda_if_available, weights_init, \
+from utilities.Logger import create_logger
+from utilities.Scaler import Scaler
+from utilities.utils import ManyHotEncoder, AverageMeterSet, SaveBest, to_cuda_if_available, weights_init, \
     get_transforms
-from utils.Logger import LOG
+
+
+logger = create_logger(__name__)
 
 
 def train(train_loader, model, optimizer, epoch, weak_mask=None, strong_mask=None):
@@ -35,11 +38,11 @@ def train(train_loader, model, optimizer, epoch, weak_mask=None, strong_mask=Non
     meters = AverageMeterSet()
     meters.update('lr', optimizer.param_groups[0]['lr'])
 
-    LOG.debug("Nb batches: {}".format(len(train_loader)))
+    logger.debug("Nb batches: {}".format(len(train_loader)))
     start = time.time()
     for i, (batch_input, target) in enumerate(train_loader):
         [batch_input, target] = to_cuda_if_available([batch_input, target])
-        LOG.debug(batch_input.mean())
+        logger.debug(batch_input.mean())
 
         strong_pred, weak_pred = model(batch_input)
         loss = 0
@@ -50,9 +53,9 @@ def train(train_loader, model, optimizer, epoch, weak_mask=None, strong_mask=Non
             target_weak = target.max(-2)[0]
             weak_class_loss = class_criterion(weak_pred[weak_mask], target_weak[weak_mask])
             if i == 1:
-                LOG.debug("target: {}".format(target.mean(-2)))
-                LOG.debug("Target_weak: {}".format(target_weak))
-                LOG.debug(weak_class_loss)
+                logger.debug("target: {}".format(target.mean(-2)))
+                logger.debug("Target_weak: {}".format(target_weak))
+                logger.debug(weak_class_loss)
             meters.update('Weak loss', weak_class_loss.item())
 
             loss += weak_class_loss
@@ -75,7 +78,7 @@ def train(train_loader, model, optimizer, epoch, weak_mask=None, strong_mask=Non
 
     epoch_time = time.time() - start
 
-    LOG.info(
+    logger.info(
         'Epoch: {}\t'
         'Time {:.2f}\t'
         '{meters}'.format(
@@ -83,7 +86,7 @@ def train(train_loader, model, optimizer, epoch, weak_mask=None, strong_mask=Non
 
 
 if __name__ == '__main__':
-    LOG.info("Simple CRNNs")
+    logger.info("Simple CRNNs")
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("-s", '--subpart_data', type=int, default=None, dest="subpart_data",
                         help="Number of files to be used. Useful when testing on small number of files.")
@@ -93,8 +96,8 @@ if __name__ == '__main__':
 
     reduced_number_of_data = f_args.subpart_data
     no_weak = f_args.no_weak
-    LOG.info("subpart_data = {}".format(reduced_number_of_data))
-    LOG.info("Using_weak labels : {}".format(not no_weak))
+    logger.info("subpart_data = {}".format(reduced_number_of_data))
+    logger.info("Using_weak labels : {}".format(not no_weak))
 
     if not no_weak:
         add_dir_path = "_with_weak"
@@ -104,9 +107,9 @@ if __name__ == '__main__':
     store_dir = os.path.join("stored_data", "simple_CRNN" + add_dir_path)
     saved_model_dir = os.path.join(store_dir, "model")
     saved_pred_dir = os.path.join(store_dir, "predictions")
-    create_folder(store_dir)
-    create_folder(saved_model_dir)
-    create_folder(saved_pred_dir)
+    os.makedirs(store_dir, exist_ok=True)
+    os.makedirs(saved_model_dir, exist_ok=True)
+    os.makedirs(saved_pred_dir, exist_ok=True)
 
     # ##############
     # Model
@@ -117,20 +120,21 @@ if __name__ == '__main__':
     crnn.apply(weights_init)
     pooling_time_ratio = cfg.pooling_time_ratio
 
-    LOG.info(crnn)
+    logger.info(crnn)
 
     # ##############
     # DATA
     # ##############
-    dataset = DatasetDcase2019Task4(os.path.join(cfg.workspace),
-                                    base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
-                                    save_log_feature=False)
+    dataset = DESED(os.path.join(cfg.workspace),
+                    base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
+                    compute_log=False)
 
-    weak_df = dataset.initialize_and_get_df(cfg.weak, reduced_number_of_data)
-    synthetic_df = dataset.initialize_and_get_df(cfg.synthetic, reduced_number_of_data, download=False)
-    validation_df = dataset.initialize_and_get_df(cfg.validation, reduced_number_of_data)
+    weak_df = dataset.initialize_and_get_df(cfg.weak, nb_files=reduced_number_of_data)
+    synthetic_df = dataset.initialize_and_get_df(cfg.synthetic, nb_files=reduced_number_of_data, download=False)
+    validation_df = dataset.initialize_and_get_df(cfg.validation, audio_dir=cfg.audio_validation_dir,
+                                                  nb_files=reduced_number_of_data)
 
-    classes = DatasetDcase2019Task4.get_classes([weak_df, validation_df, synthetic_df])
+    classes = DESED.get_classes([weak_df, validation_df, synthetic_df])
 
     # Be careful, frames is max_frames // pooling_time_ratio because max_pooling is applied on time axis in the model
     many_hot_encoder = ManyHotEncoder(classes, n_frames=cfg.max_frames // pooling_time_ratio)
@@ -141,7 +145,7 @@ if __name__ == '__main__':
     train_weak_df = weak_df.sample(frac=0.8, random_state=26)
     valid_weak_df = weak_df.drop(train_weak_df.index).reset_index(drop=True)
     train_weak_df = train_weak_df.reset_index(drop=True)
-    LOG.debug(valid_weak_df.event_labels.value_counts())
+    logger.debug(valid_weak_df.event_labels.value_counts())
     train_weak_data = DataLoadDf(train_weak_df, dataset.get_feature_file, many_hot_encoder.encode_strong_df,
                                  transform=transforms)
 
@@ -155,8 +159,8 @@ if __name__ == '__main__':
     train_synth_df_frames = train_synth_df.copy()
     train_synth_df_frames.onset = train_synth_df_frames.onset * cfg.sample_rate // cfg.hop_length // pooling_time_ratio
     train_synth_df_frames.offset = train_synth_df_frames.offset * cfg.sample_rate // cfg.hop_length // pooling_time_ratio
-    LOG.debug(valid_synth_df.event_label.value_counts())
-    LOG.debug(valid_synth_df)
+    logger.debug(valid_synth_df.event_label.value_counts())
+    logger.debug(valid_synth_df)
     train_synth_data = DataLoadDf(train_synth_df_frames, dataset.get_feature_file,
                                   many_hot_encoder.encode_strong_df,
                                   transform=transforms)
@@ -170,7 +174,7 @@ if __name__ == '__main__':
 
     scaler = Scaler()
     scaler.calculate_scaler(training_data)
-    LOG.debug(scaler.mean_)
+    logger.debug(scaler.mean_)
 
     transforms_valid = get_transforms(cfg.max_frames, scaler=scaler)
     # Validation dataset is only used to get an idea of wha could be results on evaluation dataset
@@ -203,7 +207,7 @@ if __name__ == '__main__':
     # ##############
     optim_kwargs = {"lr": 0.001, "betas": (0.9, 0.999)}
     optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, crnn.parameters()), **optim_kwargs)
-    LOG.info(optimizer)
+    logger.info(optimizer)
     bce_loss = nn.BCELoss()
 
     state = {
@@ -223,7 +227,8 @@ if __name__ == '__main__':
     save_best_cb = SaveBest("sup")
 
     # Eval 2018
-    eval_2018_df = dataset.initialize_and_get_df(cfg.eval2018, reduced_number_of_data)
+    eval_2018_df = dataset.initialize_and_get_df(cfg.eval2018, audio_dir=cfg.audio_validation_dir,
+                                                 nb_files=reduced_number_of_data)
     eval_2018 = DataLoadDf(eval_2018_df, dataset.get_feature_file, many_hot_encoder.encode_strong_df,
                            transform=transforms_valid)
 
@@ -234,27 +239,27 @@ if __name__ == '__main__':
         train(training_data, crnn, optimizer, epoch, weak_mask, strong_mask)
 
         crnn = crnn.eval()
-        LOG.info("Training synthetic metric:")
+        logger.info("Training synthetic metric:")
         train_predictions = get_predictions(crnn, train_synth_data, many_hot_encoder.decode_strong, pooling_time_ratio,
                                             save_predictions=None)
         train_metric = compute_strong_metrics(train_predictions, train_synth_df)
 
         if not no_weak:
-            LOG.info("Training weak metric:")
+            logger.info("Training weak metric:")
             weak_metric = get_f_measure_by_class(crnn, len(classes),
                                                  DataLoader(train_weak_data, batch_size=cfg.batch_size))
-            LOG.info("Weak F1-score per class: \n {}".format(pd.DataFrame(weak_metric * 100, many_hot_encoder.labels)))
-            LOG.info("Weak F1-score macro averaged: {}".format(np.mean(weak_metric)))
+            logger.info("Weak F1-score per class: \n {}".format(pd.DataFrame(weak_metric * 100, many_hot_encoder.labels)))
+            logger.info("Weak F1-score macro averaged: {}".format(np.mean(weak_metric)))
 
-            LOG.info("Valid weak metric:")
+            logger.info("Valid weak metric:")
             weak_metric = get_f_measure_by_class(crnn, len(classes),
                                                  DataLoader(valid_weak_data, batch_size=cfg.batch_size))
 
-            LOG.info(
+            logger.info(
                 "Weak F1-score per class: \n {}".format(pd.DataFrame(weak_metric * 100, many_hot_encoder.labels)))
-            LOG.info("Weak F1-score macro averaged: {}".format(np.mean(weak_metric)))
+            logger.info("Weak F1-score macro averaged: {}".format(np.mean(weak_metric)))
 
-        LOG.info("Valid synthetic metric:")
+        logger.info("Valid synthetic metric:")
         predictions = get_predictions(crnn, valid_synth_data, many_hot_encoder.decode_strong, pooling_time_ratio)
         valid_metric = compute_strong_metrics(predictions, valid_synth_df)
 
@@ -278,9 +283,9 @@ if __name__ == '__main__':
     if cfg.save_best:
         model_fname = os.path.join(saved_model_dir, "baseline_best")
         state = torch.load(model_fname)
-        LOG.info("testing model: {}".format(model_fname))
+        logger.info("testing model: {}".format(model_fname))
     else:
-        LOG.info("testing model of last epoch: {}".format(cfg.n_epoch))
+        logger.info("testing model of last epoch: {}".format(cfg.n_epoch))
 
     # ##############
     # Validation

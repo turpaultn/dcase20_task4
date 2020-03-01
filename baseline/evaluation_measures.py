@@ -12,8 +12,8 @@ import pandas as pd
 import torch
 
 import config as cfg
-from utils.Logger import create_logger
-from utils.utils import ManyHotEncoder, to_cuda_if_available
+from utilities.Logger import create_logger
+from utilities.utils import ManyHotEncoder, to_cuda_if_available
 
 
 logger = create_logger(__name__)

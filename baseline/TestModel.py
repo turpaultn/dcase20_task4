@@ -19,14 +19,14 @@ from psds_eval import PSDSEval
 from DataLoad import DataLoadDf
 from Desed import DESED
 from evaluation_measures import audio_tagging_results, get_f_measure_by_class, compute_strong_metrics, get_predictions
-from utils.utils import ManyHotEncoder, to_cuda_if_available, get_transforms, generate_tsv_from_isolated_events, \
+from utilities.utils import ManyHotEncoder, to_cuda_if_available, get_transforms, generate_tsv_from_isolated_events, \
     generate_tsv_wav_durations
-from utils.Logger import create_logger
-from utils.Scaler import Scaler, ScalerPerAudio
+from utilities.Logger import create_logger
+from utilities.Scaler import Scaler, ScalerPerAudio
 from models.CRNN import CRNN
 import config as cfg
 
-from desed.utils import post_processing_df_annotations
+from desed.post_process import post_process_df_labels
 
 
 logger = create_logger(__name__)
@@ -102,7 +102,7 @@ def test_model_ss(state, gtruth_df, folder_sources=None, pattern_isolated_events
     print(predictions.head())
     predictions["filename"] = predictions.filename.apply(
         lambda x: x.split(os.sep)[0].split(pattern_isolated_events)[0] + ".wav")
-    predictions = post_processing_df_annotations(predictions, 10)
+    predictions = post_process_df_labels(predictions, 10)
 
     if nb_files is not None:
         gtruth_df = gtruth_df[gtruth_df.filename.isin(predictions.filename.tolist())]

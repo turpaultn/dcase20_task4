@@ -16,7 +16,7 @@ import warnings
 from torch.utils.data import Dataset
 from torch.utils.data.sampler import Sampler
 
-from utils.Logger import create_logger
+from utilities.Logger import create_logger
 
 
 torch.manual_seed(0)

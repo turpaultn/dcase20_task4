@@ -14,9 +14,10 @@ eval_desed = "dataset/metadata/eval/public.tsv"
 
 audio_validation_dir = 'dataset/metadata/validation/'
 
+ref_db = -55
 # config
 # prepare_data
-sample_rate = 44100
+sample_rate = 16000
 n_window = 2048
 hop_length = 511
 n_mels = 64
