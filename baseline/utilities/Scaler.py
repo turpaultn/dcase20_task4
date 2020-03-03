@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import torch
 import json
-from utils.Logger import create_logger
+from utilities.Logger import create_logger
 
 
 logger = create_logger(__name__)

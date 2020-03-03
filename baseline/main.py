@@ -53,13 +53,13 @@ def update_ema_variables(model, ema_model, alpha, global_step):
 
 
 def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None, strong_mask=None):
-    """ One epoch of a Mean Teacher model
+    """ One epoch of a Mean Teacher ss_model
     :param train_loader: torch.utils.data.DataLoader, iterator of training batches for an epoch.
     Should return 3 values: teacher input, student input, labels
-    :param model: torch.Module, model to be trained, should return a weak and strong prediction
-    :param optimizer: torch.Module, optimizer used to train the model
+    :param model: torch.Module, ss_model to be trained, should return a weak and strong prediction
+    :param optimizer: torch.Module, optimizer used to train the ss_model
     :param epoch: int, the current epoch of training
-    :param ema_model: torch.Module, student model, should return a weak and strong prediction
+    :param ema_model: torch.Module, student ss_model, should return a weak and strong prediction
     :param weak_mask: mask the batch to get only the weak labeled data (used to calculate the loss)
     :param strong_mask: mask the batch to get only the strong labeled data (used to calcultate the loss)
     """
@@ -189,18 +189,17 @@ if __name__ == '__main__':
         add_dir_model_name = "_with_synthetic"
 
     store_dir = os.path.join("stored_data", "MeanTeacher" + add_dir_model_name)
-    saved_model_dir = os.path.join(store_dir, "model")
+    saved_model_dir = os.path.join(store_dir, "ss_model")
     saved_pred_dir = os.path.join(store_dir, "predictions")
     os.makedirs(store_dir, exist_ok=True)
     os.makedirs(saved_model_dir, exist_ok=True)
     os.makedirs(saved_pred_dir, exist_ok=True)
 
-    pooling_time_ratio = cfg.pooling_time_ratio  # --> Be careful, it depends of the model time axis pooling
+    pooling_time_ratio = cfg.pooling_time_ratio  # --> Be careful, it depends of the ss_model time axis pooling
     # ##############
     # DATA
     # ##############
-    dataset = DESED(cfg.workspace,
-                    base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
+    dataset = DESED(base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
                     compute_log=False)
 
     weak_df = dataset.initialize_and_get_df(cfg.weak, nb_files=reduced_number_of_data)
@@ -296,7 +295,7 @@ if __name__ == '__main__':
     bce_loss = nn.BCELoss()
 
     state = {
-        'model': {"name": crnn.__class__.__name__,
+        'ss_model': {"name": crnn.__class__.__name__,
                   'args': '',
                   "kwargs": crnn_kwargs,
                   'state_dict': crnn.state_dict()},
@@ -339,7 +338,7 @@ if __name__ == '__main__':
         logger.info("Weak F1-score per class: \n {}".format(pd.DataFrame(weak_metric * 100, many_hot_encoder.labels)))
         logger.info("Weak F1-score macro averaged: {}".format(np.mean(weak_metric)))
 
-        state['model']['state_dict'] = crnn.state_dict()
+        state['ss_model']['state_dict'] = crnn.state_dict()
         state['model_ema']['state_dict'] = crnn_ema.state_dict()
         state['optimizer']['state_dict'] = optimizer.state_dict()
         state['epoch'] = epoch
@@ -361,9 +360,9 @@ if __name__ == '__main__':
     if cfg.save_best:
         model_fname = os.path.join(saved_model_dir, "baseline_best")
         state = torch.load(model_fname)
-        logger.info("testing model: {}".format(model_fname))
+        logger.info("testing ss_model: {}".format(model_fname))
     else:
-        logger.info("testing model of last epoch: {}".format(cfg.n_epoch))
+        logger.info("testing ss_model of last epoch: {}".format(cfg.n_epoch))
 
     # ##############
     # Validation

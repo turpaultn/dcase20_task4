@@ -4,15 +4,15 @@ import pandas as pd
 
 workspace = ".."
 # DESED Paths
-weak = 'dataset/metadata/train/weak.tsv'
-unlabel = 'dataset/metadata/train/unlabel_in_domain.tsv'
-synthetic = 'dataset/metadata/train/synthetic.tsv'
-validation = 'dataset/metadata/validation/validation.tsv'
-test2018 = 'dataset/metadata/validation/test_dcase2018.tsv'
-eval2018 = 'dataset/metadata/validation/eval_dcase2018.tsv'
-eval_desed = "dataset/metadata/eval/public.tsv"
+weak = os.path.join(workspace, 'dataset/metadata/train/weak.tsv')
+unlabel = os.path.join(workspace, 'dataset/metadata/train/unlabel_in_domain.tsv')
+synthetic = os.path.join(workspace, 'dataset/metadata/train/synthetic20/soundscapes.tsv')
+validation = os.path.join(workspace, 'dataset/metadata/validation/validation.tsv')
+test2018 = os.path.join(workspace, 'dataset/metadata/validation/test_dcase2018.tsv')
+eval2018 = os.path.join(workspace, 'dataset/metadata/validation/eval_dcase2018.tsv')
+eval_desed = os.path.join(workspace, "dataset/metadata/eval/public.tsv")
 
-audio_validation_dir = 'dataset/metadata/validation/'
+audio_validation_dir = os.path.join(workspace, 'dataset/metadata/validation/')
 
 ref_db = -55
 # config
@@ -51,7 +51,7 @@ checkpoint_epochs = 1
 save_best = True
 
 file_path = os.path.abspath(os.path.dirname(__file__))
-classes = pd.read_csv(os.path.join(file_path, "..", validation), sep="\t").event_label.dropna().sort_values().unique()
+classes = pd.read_csv(os.path.join(file_path, validation), sep="\t").event_label.dropna().sort_values().unique()
 
 crnn_kwargs = {"n_in_channel": 1, "nclass": len(classes), "attention": True, "n_RNN_cell": 64,
                "n_layers_RNN": 2,
