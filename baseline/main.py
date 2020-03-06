@@ -6,8 +6,12 @@
 #########################################################################
 
 import argparse
+import functools
+import glob
 import os
 import time
+import warnings
+from pprint import pprint
 
 import pandas as pd
 import numpy as np
@@ -17,17 +21,16 @@ from torch.utils.data import DataLoader
 from torch import nn
 
 from Desed import DESED
-from DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler
+from DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler, logger
 from TestModel import test_model
-from evaluation_measures import get_f_measure_by_class, get_predictions, audio_tagging_results, compute_strong_metrics
+from evaluation_measures import get_f_measure_by_class, get_predictions, compute_sed_eval_metrics, psds_results
 from models.CRNN import CRNN
 import config as cfg
 from utilities import ramps
 from utilities.Logger import create_logger
-from utilities.Scaler import Scaler
+from utilities.Scaler import ScalerPerAudio
 from utilities.utils import ManyHotEncoder, SaveBest, to_cuda_if_available, weights_init, \
-    get_transforms, AverageMeterSet
-
+    get_transforms, AverageMeterSet, generate_tsv_wav_durations, meta_path_to_audio_dir, audio_dir_to_meta_path
 
 logger = create_logger(__name__)
 
@@ -65,15 +68,14 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
     """
     class_criterion = nn.BCELoss()
     consistency_criterion = nn.MSELoss()
-    [class_criterion, consistency_criterion] = to_cuda_if_available(
-        [class_criterion, consistency_criterion])
+    class_criterion, consistency_criterion = to_cuda_if_available(class_criterion, consistency_criterion)
 
     meters = AverageMeterSet()
 
     logger.debug("Nb batches: {}".format(len(train_loader)))
     start = time.time()
     rampup_length = len(train_loader) * cfg.n_epoch // 2
-    for i, (batch_input, ema_batch_input, target) in enumerate(train_loader):
+    for i, ((batch_input, ema_batch_input), target) in enumerate(train_loader):
         global_step = epoch * len(train_loader) + i
         if global_step < rampup_length:
             rampup_value = ramps.sigmoid_rampup(global_step, rampup_length)
@@ -84,7 +86,7 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
         # adjust_learning_rate(optimizer, rampup_value, rampdown_value)
         meters.update('lr', optimizer.param_groups[0]['lr'])
 
-        [batch_input, ema_batch_input, target] = to_cuda_if_available([batch_input, ema_batch_input, target])
+        batch_input, ema_batch_input, target = to_cuda_if_available(batch_input, ema_batch_input, target)
         logger.debug(batch_input.mean())
         # Outputs
         strong_pred_ema, weak_pred_ema = ema_model(ema_batch_input)
@@ -168,6 +170,119 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
             epoch, epoch_time, meters=meters))
 
 
+# Todo try to test if this would work
+def get_feature_file_ss(filename, ss_df, feature_dir, ss_pattern="_events"):
+    fnames_no_pattern = ss_df.filename.apply(lambda x: x.split(ss_pattern)[0])
+    fname_to_match = os.path.splitext(filename)[0]
+    filenames_to_load = ss_df.filename[fnames_no_pattern == fname_to_match].tolist()
+    filenames_to_load.append(filename)
+    loaded_data = []
+    for fname in filenames_to_load:
+        fname = os.path.join(feature_dir, os.path.splitext(fname)[0] + ".npy")
+        data = np.load(fname)
+        loaded_data.append(data)
+    return np.array(loaded_data)
+
+def add_ss_df(data_df, data_ss_df):
+    df_data = data_df.copy()
+    df_data_ss = data_ss_df.copy()
+    df_data.loc[:, "id"] = df_data.filename.apply(lambda x: os.path.splitext(x)[0])
+    # df_data_ss.loc[:, "id"] = df_data_ss.filename.apply(lambda x: )
+
+
+def get_dfs(desed_dataset, reduced_nb_data):
+    weak_df = desed_dataset.initialize_and_get_df(cfg.weak, nb_files=reduced_nb_data)
+    unlabel_df = desed_dataset.initialize_and_get_df(cfg.unlabel, nb_files=reduced_nb_data)
+    # Event if synthetic not used for training, used on validation purpose
+    synthetic_df = desed_dataset.initialize_and_get_df(cfg.synthetic, nb_files=reduced_nb_data, download=False)
+    validation_df = desed_dataset.initialize_and_get_df(cfg.validation, audio_dir=cfg.audio_validation_dir,
+                                                        nb_files=reduced_nb_data)
+
+    # Divide weak in train and valid
+    train_weak_df = weak_df.sample(frac=0.8, random_state=26)
+    valid_weak_df = weak_df.drop(train_weak_df.index).reset_index(drop=True)
+    train_weak_df = train_weak_df.reset_index(drop=True)
+    logger.debug(valid_weak_df.event_labels.value_counts())
+
+    # Divide synthetic in train and valid
+    filenames_train = synthetic_df.filename.drop_duplicates().sample(frac=0.8, random_state=26)
+    train_synth_df = synthetic_df[synthetic_df.filename.isin(filenames_train)]
+    valid_synth_df = synthetic_df.drop(train_synth_df.index).reset_index(drop=True)
+
+    # Put train_synth in frames so many_hot_encoder can work.
+    #  Not doing it for valid, because not using labels (when prediction) and event based metric expect sec.
+    train_synth_df.onset = train_synth_df.onset * cfg.sample_rate // cfg.hop_length // pooling_time_ratio
+    train_synth_df.offset = train_synth_df.offset * cfg.sample_rate // cfg.hop_length // pooling_time_ratio
+    logger.debug(valid_synth_df.event_label.value_counts())
+
+    data_dfs = {"weak": weak_df,
+                "train_weak": train_weak_df,
+                "valid_weak": valid_weak_df,
+                "unlabel": unlabel_df,
+                "synthetic": synthetic_df,
+                "train_synthetic": train_synth_df,
+                "valid_synthetic": valid_synth_df,
+                "validation": validation_df
+                }
+
+    return data_dfs
+
+
+# Todo Generate separate_wavs on all the data (weak, unlabel in domain...)
+# Function create df from ss_folder (write the ..._events folder in the df) (so maybe take a pattern as entry)
+# Extract features from df from the dataset, will work since we use the .._events folder in df
+# Create a Transform "ConcatMixturesSeparated" that replaces the unsqueeze_axis of ToTensor
+# (how do we do for the folder ??, do we do a match ?)
+# Adapt the CNN to take more than 1 channel at the beginning
+def create_tsv_from_ss_folder(ss_folder, out_tsv=None):
+    not_only_dir = False
+    if out_tsv is None:
+        out_tsv = audio_dir_to_meta_path(ss_folder)
+
+    if not os.path.exists(out_tsv):
+        logger.info(f"generating: {out_tsv}, from {ss_folder}")
+        list_events = []
+        list_dirs = os.listdir(ss_folder)
+        for ss_dir in list_dirs:
+            dir_path = os.path.join(ss_folder, ss_dir)
+            if os.path.isdir(dir_path):
+                files_to_add = [os.path.join(ss_dir, fname) for fname in os.listdir(dir_path)]
+                if len(files_to_add) == 0:
+                    warnings.warn(f"Empty separated source folder {dir_path}")
+                list_events.extend(files_to_add)
+            else:
+                not_only_dir = True
+        if not_only_dir:
+            warnings.warn(f"Be careful, not only directories of separated events in the folder specified: {ss_folder}")
+        df_events = pd.DataFrame(list_events, columns=["filename"])
+        df_events.to_csv(out_tsv, sep="\t", index=False)
+    return out_tsv
+
+
+# Todo reput as normal
+def get_dfs_ss(desed_dataset, reduced_nb_data):
+    # weak_csv = create_tsv_from_ss_folder(cfg.weak_ss)
+    # unlabel_csv = create_tsv_from_ss_folder(cfg.unlabel_ss)
+    synthetic_csv = create_tsv_from_ss_folder(cfg.synthetic_ss)
+    # validation_csv = create_tsv_from_ss_folder(cfg.validation_ss)
+
+    # Extract features, audio_dir="" since we put the full path in the dataframe
+    # weak_df = desed_dataset.initialize_and_get_df(weak_csv, nb_files=reduced_nb_data)
+    # unlabel_df = desed_dataset.initialize_and_get_df(unlabel_csv, nb_files=reduced_nb_data)
+    # Event if synthetic not used for training, used on validation purpose
+    synthetic_df = desed_dataset.initialize_and_get_df(synthetic_csv, nb_files=reduced_nb_data, download=False)
+    # validation_df = desed_dataset.initialize_and_get_df(validation_csv, audio_dir=cfg.audio_validation_dir,
+    #                                                     nb_files=reduced_nb_data)
+
+    data_dfs = {
+        # "weak": weak_df,
+        # "unlabel": unlabel_df,
+        "synthetic": synthetic_df,
+        # "validation": validation_df
+    }
+    return data_dfs
+
+
 if __name__ == '__main__':
     logger.info("MEAN TEACHER")
     parser = argparse.ArgumentParser(description="")
@@ -176,12 +291,14 @@ if __name__ == '__main__':
 
     parser.add_argument("-n", '--no_synthetic', dest='no_synthetic', action='store_true', default=False,
                         help="Not using synthetic labels during training")
+    parser.add_argument("-ss", "--use_separated_sources", action="store_true", default=False,
+                        help="If using this option, make sure you config.py points to the right folders")
     f_args = parser.parse_args()
+    pprint(vars(f_args))
 
     reduced_number_of_data = f_args.subpart_data
     no_synthetic = f_args.no_synthetic
-    logger.info("subpart_data = {}".format(reduced_number_of_data))
-    logger.info("Using synthetic data = {}".format(not no_synthetic))
+    use_separated_sources = f_args.use_separated_sources
 
     if no_synthetic:
         add_dir_model_name = "_no_synthetic"
@@ -202,40 +319,36 @@ if __name__ == '__main__':
     dataset = DESED(base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
                     compute_log=False)
 
-    weak_df = dataset.initialize_and_get_df(cfg.weak, nb_files=reduced_number_of_data)
-    unlabel_df = dataset.initialize_and_get_df(cfg.unlabel, nb_files=reduced_number_of_data)
-    # Event if synthetic not used for training, used on validation purpose
-    synthetic_df = dataset.initialize_and_get_df(cfg.synthetic, nb_files=reduced_number_of_data, download=False)
-    validation_df = dataset.initialize_and_get_df(cfg.validation, audio_dir=cfg.audio_validation_dir,
-                                                  nb_files=reduced_number_of_data)
+    if use_separated_sources:
+        dfs_ss = get_dfs_ss(dataset, reduced_number_of_data)
+
+    dfs = get_dfs(dataset, reduced_number_of_data)
+
+    # Meta path for psds
+    path, ext = os.path.splitext(cfg.synthetic)
+    path_durations_synth = path + "_durations" + ext
+    if not os.path.exists(path_durations_synth):
+        durations_synth = generate_tsv_wav_durations(meta_path_to_audio_dir(cfg.synthetic), path_durations_synth)
+    else:
+        durations_synth = pd.read_csv(path_durations_synth, sep="\t")
 
     classes = cfg.classes
     many_hot_encoder = ManyHotEncoder(classes, n_frames=cfg.max_frames // pooling_time_ratio)
 
-    transforms = get_transforms(cfg.max_frames)
+    scaler = ScalerPerAudio(cfg.normalization_on, cfg.normalization_type)
+    transforms = get_transforms(cfg.max_frames, scaler, augment_type="noise")
 
-    # Divide weak in train and valid
-    train_weak_df = weak_df.sample(frac=0.8, random_state=26)
-    valid_weak_df = weak_df.drop(train_weak_df.index).reset_index(drop=True)
-    train_weak_df = train_weak_df.reset_index(drop=True)
-    logger.debug(valid_weak_df.event_labels.value_counts())
-
-    # Divide synthetic in train and valid
-    filenames_train = synthetic_df.filename.drop_duplicates().sample(frac=0.8, random_state=26)
-    train_synth_df = synthetic_df[synthetic_df.filename.isin(filenames_train)]
-    valid_synth_df = synthetic_df.drop(train_synth_df.index).reset_index(drop=True)
-
-    # Put train_synth in frames so many_hot_encoder can work.
-    #  Not doing it for valid, because not using labels (when prediction) and event based metric expect sec.
-    train_synth_df.onset = train_synth_df.onset * cfg.sample_rate // cfg.hop_length // pooling_time_ratio
-    train_synth_df.offset = train_synth_df.offset * cfg.sample_rate // cfg.hop_length // pooling_time_ratio
-    logger.debug(valid_synth_df.event_label.value_counts())
-
-    train_weak_data = DataLoadDf(train_weak_df, dataset.get_feature_file, many_hot_encoder.encode_strong_df,
+    train_weak_data = DataLoadDf(dfs["train_weak"],
+                                 dataset.get_feature_file, many_hot_encoder.encode_strong_df,
                                  transform=transforms)
-    unlabel_data = DataLoadDf(unlabel_df, dataset.get_feature_file, many_hot_encoder.encode_strong_df,
+    unlabel_data = DataLoadDf(dfs["unlabel"],
+                              dataset.get_feature_file, many_hot_encoder.encode_strong_df,
                               transform=transforms)
-    train_synth_data = DataLoadDf(train_synth_df, dataset.get_feature_file, many_hot_encoder.encode_strong_df,
+
+    get_feature_file_alias = functools.partial(get_feature_file_ss, ss_df=dfs_ss["synthetic"],
+                                               feature_dir=dataset.feature_dir)
+    train_synth_data = DataLoadDf(dfs["train_synthetic"],
+                                  get_feature_file_alias, many_hot_encoder.encode_strong_df,
                                   transform=transforms)
 
     if not no_synthetic:
@@ -249,14 +362,14 @@ if __name__ == '__main__':
     # Assume weak data is always the first one
     weak_mask = slice(batch_sizes[0])
 
-    scaler = Scaler()
-    scaler.calculate_scaler(ConcatDataset(list_dataset))
+    # scaler = Scaler()
+    # scaler.calculate_scaler(ConcatDataset(list_dataset))
 
-    logger.debug(scaler.mean_)
+    # logger.debug(scaler.mean_)
 
-    transforms = get_transforms(cfg.max_frames, scaler, augment_type="noise")
-    for i in range(len(list_dataset)):
-        list_dataset[i].set_transform(transforms)
+    # transforms = get_transforms(cfg.max_frames, scaler, augment_type="noise")
+    # for i in range(len(list_dataset)):
+    #     list_dataset[i].set_transform(transforms)
 
     concat_dataset = ConcatDataset(list_dataset)
     sampler = MultiStreamBatchSampler(concat_dataset,
@@ -265,9 +378,12 @@ if __name__ == '__main__':
     training_data = DataLoader(concat_dataset, batch_sampler=sampler)
 
     transforms_valid = get_transforms(cfg.max_frames, scaler=scaler)
-    valid_synth_data = DataLoadDf(valid_synth_df, dataset.get_feature_file, many_hot_encoder.encode_strong_df,
-                                  transform=transforms_valid)
-    valid_weak_data = DataLoadDf(valid_weak_df, dataset.get_feature_file, many_hot_encoder.encode_weak,
+    valid_synth_data = DataLoadDf(dfs["valid_synthetic"],
+                                  dataset.get_feature_file, many_hot_encoder.encode_strong_df,
+                                  transform=transforms_valid, return_indexes=True)
+    valid_synth_dataloader = DataLoader(valid_synth_data, batch_size=cfg.batch_size)
+    valid_weak_data = DataLoadDf(dfs["valid_weak"],
+                                 dataset.get_feature_file, many_hot_encoder.encode_weak,
                                  transform=transforms_valid)
 
     # Eval 2018
@@ -321,15 +437,18 @@ if __name__ == '__main__':
         crnn = crnn.train()
         crnn_ema = crnn_ema.train()
 
-        [crnn, crnn_ema] = to_cuda_if_available([crnn, crnn_ema])
+        crnn, crnn_ema = to_cuda_if_available(crnn, crnn_ema)
 
         train(training_data, crnn, optimizer, epoch, ema_model=crnn_ema, weak_mask=weak_mask, strong_mask=strong_mask)
 
         crnn = crnn.eval()
         logger.info("\n ### Valid synthetic metric ### \n")
-        predictions = get_predictions(crnn, valid_synth_data, many_hot_encoder.decode_strong, pooling_time_ratio,
+        predictions = get_predictions(crnn, valid_synth_dataloader, many_hot_encoder.decode_strong, pooling_time_ratio,
                                       save_predictions=None)
-        valid_events_metric = compute_strong_metrics(predictions, valid_synth_df)
+        # Validation with synthetic data
+        valid_synth = dfs["valid_synthetic"]
+        valid_events_metric = compute_sed_eval_metrics(predictions, valid_synth)
+        psds_results(predictions, valid_synth, durations_synth)
 
         logger.info("\n ### Valid weak metric ### \n")
         weak_metric = get_f_measure_by_class(crnn, len(classes),
@@ -368,10 +487,11 @@ if __name__ == '__main__':
     # Validation
     # ##############
     predicitons_fname = os.path.join(saved_pred_dir, "baseline_validation.tsv")
-    test_model(state, cfg.validation, reduced_number_of_data, predicitons_fname)
+    test_model(state, dfs["validation"], reduced_number_of_data, predicitons_fname)
 
     # ##############
     # Evaluation
     # ##############
     predicitons_eval2019_fname = os.path.join(saved_pred_dir, "baseline_eval2019.tsv")
-    test_model(state, cfg.eval_desed, reduced_number_of_data, predicitons_eval2019_fname)
+    evaluation_df = pd.read_csv(cfg.eval_desed, sep="\t")
+    test_model(state, eval, reduced_number_of_data, predicitons_eval2019_fname)

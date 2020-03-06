@@ -133,7 +133,7 @@ class Scaler(object):
         self.std_ = self.std(variance)
 
 
-class ScalerPerAudio(object):
+class ScalerPerAudio:
     """Normalize inputs one by one
         Args:
             normalization: str, in {"global", "per_channel"}
@@ -160,20 +160,21 @@ class ScalerPerAudio(object):
             tensor = False
 
         if self.normalization == "global":
-            if self.type_norm == "mean":
-                res_data = (spectrogram - spectrogram.mean()) / spectrogram.std()
-            elif self.type_norm == "max":
-                res_data = spectrogram - spectrogram.max()
-            else:
-                raise NotImplementedError("No other type_norm implemented except {'mean', 'max'}")
-
+            axis = None
         elif self.normalization == "per_channel":
-            if self.type_norm == "mean":
-                res_data = (spectrogram - spectrogram.mean(0)) / spectrogram.std(0)
+            axis = 0
+        else:
+            raise NotImplementedError("normalization is 'global' or 'per_channel'")
+
+        if self.normalization == "global":
+            if self.type_norm == "standard":
+                res_data = (spectrogram - spectrogram.mean(axis)) / spectrogram.std(axis)
             elif self.type_norm == "max":
-                res_data = spectrogram - spectrogram.max(0)
+                res_data = spectrogram / spectrogram.max(axis)
+            elif self.type_norm == "min-max":
+                res_data = (spectrogram - spectrogram.min(axis)) / (spectrogram.max(axis) - spectrogram.min(axis))
             else:
-                raise NotImplementedError("No other normalization implemented except {'global', 'per_channel'}")
+                raise NotImplementedError("No other type_norm implemented except {'standard', 'max', 'min-max'}")
 
         if tensor:
             res_data = torch.Tensor(res_data)

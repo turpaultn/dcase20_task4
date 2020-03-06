@@ -4,26 +4,29 @@
 # Copyright Nicolas Turpault, Romain Serizel, Justin Salamon, Ankit Parag Shah, 2019, v1.0
 # This software is distributed under the terms of the License MIT
 #########################################################################
+from os import path as osp
+
+import psds_eval
 import scipy
 from dcase_util.data import ProbabilityEncoder
 import sed_eval
 import numpy as np
 import pandas as pd
 import torch
+from psds_eval import PSDSEval
 
 import config as cfg
 from utilities.Logger import create_logger
-from utilities.utils import ManyHotEncoder, to_cuda_if_available
-
+from utilities.utils import ManyHotEncoder, to_cuda_if_available, generate_tsv_wav_durations
 
 logger = create_logger(__name__)
 
 
 def get_f_measure_by_class(torch_model, nb_tags, dataloader_, thresholds_=None):
-    """ get f measure for each class given a model and a generator of data (batch_x, y)
+    """ get f measure for each class given a ss_model and a generator of data (batch_x, y)
 
     Args:
-        torch_model : Model, model to get predictions, forward should return weak and strong predictions
+        torch_model : Model, ss_model to get predictions, forward should return weak and strong predictions
         nb_tags : int, number of classes which are represented
         dataloader_ : generator, data generator used to get f_measure
         thresholds_ : int or list, thresholds to apply to each class to binarize probabilities
@@ -48,7 +51,7 @@ def get_f_measure_by_class(torch_model, nb_tags, dataloader_, thresholds_=None):
         pred_weak = pred_weak.cpu().data.numpy()
         labels = y.numpy()
 
-        # Used only with a model predicting only strong outputs
+        # Used only with a ss_model predicting only strong outputs
         if len(pred_weak.shape) == 3:
             # average data to have weak labels
             pred_weak = np.max(pred_weak, axis=1)
@@ -229,8 +232,8 @@ def get_predictions(model, valid_dataloader, decoder, pooling_time_ratio=1, save
                 logger.debug("predictions strong: \n{}".format(pred_strong_it))
 
     # In seconds
-    prediction_df.onset = prediction_df.onset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
-    prediction_df.offset = prediction_df.offset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
+    prediction_df.loc[:, "onset"] = prediction_df.onset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
+    prediction_df.loc[:, "offset"] = prediction_df.offset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
     prediction_df = prediction_df.reset_index(drop=True)
     if save_predictions is not None:
         logger.info("Saving predictions at: {}".format(save_predictions))
@@ -238,19 +241,31 @@ def get_predictions(model, valid_dataloader, decoder, pooling_time_ratio=1, save
     return prediction_df
 
 
-def compute_strong_metrics(predictions, groundtruth, pooling_time_ratio=None):
-    if pooling_time_ratio is not None:
-        logger.warning("pooling_time_ratio is deprecated, use it in get_predictions() instead.")
-        # In seconds
-        predictions.onset = predictions.onset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
-        predictions.offset = predictions.offset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
+def psds_results(predictions, gtruth_df, gtruth_durations):
+    dtc_threshold = 0.5
+    gtc_threshold = 0.5
+    cttc_threshold = 0.3
+    # Instantiate PSDSEval
+    psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold,
+                    ground_truth=gtruth_df, metadata=gtruth_durations)
 
+    psds.add_operating_point(predictions)
+    psds_score = psds.psds(alpha_ct=0, alpha_st=0, max_efpr=100)
+    print(f"\nPSD-Score (0, 0, 100): {psds_score.value:.5f}")
+    psds_score = psds.psds(alpha_ct=1, alpha_st=0, max_efpr=100)
+    print(f"\nPSD-Score (1, 0, 100): {psds_score.value:.5f}")
+    psds_score = psds.psds(alpha_ct=0, alpha_st=1, max_efpr=100)
+    print(f"\nPSD-Score (0, 1, 100): {psds_score.value:.5f}")
+
+
+def compute_sed_eval_metrics(predictions, groundtruth):
     metric_event = event_based_evaluation_df(groundtruth, predictions, t_collar=0.200,
                                              percentage_of_length=0.2)
     metric_segment = segment_based_evaluation_df(groundtruth, predictions, time_resolution=1.)
     logger.info(metric_event)
     logger.info(metric_segment)
-    return metric_event, metric_segment
+
+    return metric_event
 
 
 def format_df(df, mhe):

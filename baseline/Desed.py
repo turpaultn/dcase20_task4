@@ -15,8 +15,7 @@ import pandas as pd
 import config as cfg
 from desed.download_real import download
 from utilities.Logger import create_logger
-from utilities.utils import read_audio
-
+from utilities.utils import read_audio, meta_path_to_audio_dir
 
 logger = create_logger(__name__)
 
@@ -108,7 +107,7 @@ class DESED:
         df_meta = self.get_df_from_meta(meta_name, nb_files)
         logger.info("{} Total file number: {}".format(meta_name, len(df_meta.filename.unique())))
         if audio_dir is None:
-            audio_dir = os.path.splitext(tsv_path.replace("metadata", "audio"))[0]
+            audio_dir = meta_path_to_audio_dir(tsv_path)
         if download:
             # Get only one filename once
             filenames = df_meta.filename.drop_duplicates()
@@ -220,7 +219,8 @@ class DESED:
     def get_subpart_data(df, nb_files):
         column = "filename"
         if not nb_files > len(df[column].unique()):
-            filenames = df[column].drop_duplicates().sample(nb_files, random_state=10)
+            # sort_values and random_state are used to have the same filenames for similar datasets (eg, normal and ss)
+            filenames = df[column].drop_duplicates().sort_values().sample(nb_files, random_state=10)
             df = df[df[column].isin(filenames)].reset_index(drop=True)
             logger.debug("Taking subpart of the data, len : {}, df_len: {}".format(nb_files, len(df)))
         return df

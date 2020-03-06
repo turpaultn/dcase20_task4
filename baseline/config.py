@@ -6,13 +6,27 @@ workspace = ".."
 # DESED Paths
 weak = os.path.join(workspace, 'dataset/metadata/train/weak.tsv')
 unlabel = os.path.join(workspace, 'dataset/metadata/train/unlabel_in_domain.tsv')
-synthetic = os.path.join(workspace, 'dataset/metadata/train/synthetic20/soundscapes.tsv')
+synthetic = os.path.join(workspace, 'dataset/metadata/train/synthetic20_rep_reverb/soundscapes.tsv')
 validation = os.path.join(workspace, 'dataset/metadata/validation/validation.tsv')
 test2018 = os.path.join(workspace, 'dataset/metadata/validation/test_dcase2018.tsv')
 eval2018 = os.path.join(workspace, 'dataset/metadata/validation/eval_dcase2018.tsv')
 eval_desed = os.path.join(workspace, "dataset/metadata/eval/public.tsv")
 
-audio_validation_dir = os.path.join(workspace, 'dataset/metadata/validation/')
+# Useful because not just metadata replaced by audio, there are subsets (eval2018, test2018) so we specify the audio
+audio_validation_dir = os.path.join(workspace, 'dataset/audio/validation')
+
+## Separated data
+weak_ss = os.path.join(workspace, 'dataset/audio/train/weak_ss/ss_computed')
+unlabel_ss = os.path.join(workspace, 'dataset/audio/train/unlabel_in_domain_ss/ss_computed')
+synthetic_ss = os.path.join(workspace, 'dataset/audio/train/synthetic20_rep_reverb/ss_computed')
+validation_ss = os.path.join(workspace, 'dataset/audio/validation/validation_ss/ss_computed')
+test2018_ss = os.path.join(workspace, 'dataset/audio/validation/test_dcase2018_ss/ss_computed')
+eval2018_ss = os.path.join(workspace, 'dataset/audio/validation/eval_dcase2018_ss/ss_computed')
+eval_desed_ss = os.path.join(workspace, "dataset/audio/eval/public_ss/ss_computed")
+
+
+normalization_on = "global"
+normalization_type = "min-max"
 
 ref_db = -55
 # config

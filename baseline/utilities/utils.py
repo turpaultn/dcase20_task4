@@ -20,7 +20,8 @@ import torch
 from torch import nn
 from dcase_util.data import DecisionEncoder
 
-from DataLoad import AugmentGaussianNoise, ApplyLog, PadOrTrunc, ToTensor, Normalize, Compose
+from DataLoad import Compose
+from utilities.Transforms import ApplyLog, PadOrTrunc, AugmentGaussianNoise, ToTensor, Normalize
 
 
 class ManyHotEncoder:
@@ -449,3 +450,11 @@ def generate_tsv_from_isolated_events(wav_folder, out_tsv=None):
     if out_tsv is not None:
         source_sep_df.to_csv(out_tsv, sep="\t", index=False, float_format="%.3f")
     return source_sep_df
+
+
+def meta_path_to_audio_dir(tsv_path):
+    return os.path.splitext(tsv_path.replace("metadata", "audio"))[0]
+
+
+def audio_dir_to_meta_path(audio_dir):
+    return audio_dir.replace("audio", "metadata") + ".tsv"
