@@ -8,9 +8,11 @@ import sys
 import argparse
 
 
-relative_path_ss_repo = osp.join("..", "..")
+absolute_dir_path = os.path.abspath(os.path.dirname(__file__))
+relative_path_ss_repo = osp.join(absolute_dir_path, "..")
 base_dir_repo = osp.abspath(relative_path_ss_repo)
-sys.path.append(osp.join(base_dir_repo, "dcase2020_inference_source_separation", "dcase2020_review"))
+sys.path.append(osp.join(base_dir_repo, "dcase2020_inference_source_separation", "sscode"))
+
 
 import inference
 

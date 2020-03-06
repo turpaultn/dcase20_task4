@@ -110,7 +110,7 @@ if __name__ == '__main__':
 
 
         def generate_multiproc(start_from, number, rand_state):
-            # We need to give a different random state to each object otherwise we just replicate 4 times the same data
+            # We need to give a different random state to each object otherwise we just replicate X times the same data
             # except if it is None
             sg = SoundscapesGenerator(duration=clip_duration,
                                       fg_folder=fg_folder,
@@ -128,6 +128,7 @@ if __name__ == '__main__':
             random_states = [None for i in range(nproc)]
         else:
             random_states = [random_state + i for i in range(nproc)]
+        print(random_states)
         with multiprocessing.Pool(nproc) as p:
             p.starmap(generate_multiproc, zip(list_start, numbers, random_states))
     # Single process
@@ -149,5 +150,5 @@ if __name__ == '__main__':
     # concat same labels overlapping
     post_process_txt_labels(full_out_folder,
                             output_folder=full_out_folder,
-                            output_tsv=out_tsv)
+                            output_tsv=out_tsv, rm_nOn_nOff=True)
 

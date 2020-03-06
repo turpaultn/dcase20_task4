@@ -10,6 +10,7 @@ import sys
 import time
 from pprint import pformat
 from desed.logger import create_logger
+from desed.post_process import post_process_txt_labels
 from desed.utils import create_folder
 
 import config_data as cfg
@@ -18,8 +19,8 @@ relative_path_ss_repo = osp.join(".")
 base_dir_repo = osp.abspath(relative_path_ss_repo)
 sys.path.append(osp.join(base_dir_repo, "dcase2020_inference_source_separation", "sscode"))
 
-from reverberate_and_mix import reverberate_and_mix, make_rir_dict_from_folder, make_mix_info_subsources, read_mix_info, \
-    read_item_dict, write_item_dict, make_mix_info, write_mix_info
+from reverberate_and_mix import reverberate_and_mix, make_rir_dict_from_folder, make_mix_info_subsources, \
+    read_mix_info, write_item_dict, write_mix_info
 from utils import make_example_dict_from_folder, check_and_correct_example
 
 
@@ -116,24 +117,18 @@ if __name__ == '__main__':
             mix_info = read_mix_info(mix_info_file)
 
     if mix_info is None:
-        if src_list_file != "" and osp.exists(src_list_file):
-            source_dict = read_item_dict(src_list_file)
-        else:
-            # Preparing lists to reverberate
-            # Create a dictionnary of the isolated events used to create a soundscape
-            source_dict = make_example_dict_from_folder(input_folder, subset=subset,
-                                                        ss_regex=re.compile(r".*_events"), pattern="_events",
-                                                        subfolder_events=None)
-            if src_list_file != "":
-                write_item_dict(source_dict, src_list_file)
+        # Preparing lists to reverberate
+        # Create a dictionnary of the isolated events used to create a soundscape
+        source_dict = make_example_dict_from_folder(input_folder, subset=subset,
+                                                    ss_regex=re.compile(r".*_events"), pattern="_events",
+                                                    subfolder_events=None)
+        if src_list_file != "":
+            write_item_dict(source_dict, src_list_file)
 
-        if rir_list_file != "" and osp.exists(rir_list_file):
-            rir_dict = read_item_dict(rir_list_file)
-        else:
-            # Create the Room ipulse responses dictionnary
-            rir_dict = make_rir_dict_from_folder(rir_folder)
-            if rir_list_file != "":
-                write_item_dict(rir_dict, rir_list_file)
+        # Create the Room ipulse responses dictionnary
+        rir_dict = make_rir_dict_from_folder(rir_folder)
+        if rir_list_file != "":
+            write_item_dict(rir_dict, rir_list_file)
 
         # Creat the mix we want to apply
         mix_info = make_mix_info_subsources({}, source_dict[subset], rir_dict[rir_subset],
@@ -166,4 +161,7 @@ if __name__ == '__main__':
                                   check_length=True, fix_length=True, check_mix=True, fix_mix=True,
                                   sample_rate=sample_rate, duration=clip_duration)
 
+    post_process_txt_labels(reverb_folder,
+                            output_folder=reverb_folder,
+                            output_tsv=out_tsv, rm_nOn_nOff=True)
     print(time.time() - t)
