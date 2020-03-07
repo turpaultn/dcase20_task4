@@ -159,6 +159,7 @@ IcETRAN conference, Srebrno Jezero, Serbia, June 2019.
 [dcase-discussions]: https://groups.google.com/forum/#!forum/dcase-discussions
 [dcase_website]: http://dcase.community/challenge2020/task-sound-event-detection-and-separation-in-domestic-environments
 [desed]: https://github.com/turpaultn/DESED
+[desed_website]: https://project.inria.fr/desed/dcase-challenge/dcase-2020-task-4/
 [evaluation_dataset]: https://zenodo.org/record/3588172
 [FSD]: https://datasets.freesound.org/fsd/
 [fuss]: https://zenodo.org/record/3694384/
