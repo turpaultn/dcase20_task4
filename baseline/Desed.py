@@ -13,10 +13,9 @@ import time
 import pandas as pd
 
 import config as cfg
-from utils.Logger import create_logger
-from download_data import download
-from utils.utils import read_audio
-
+from desed.download_real import download
+from utilities.Logger import create_logger
+from utilities.utils import read_audio, meta_path_to_audio_dir
 
 logger = create_logger(__name__)
 
@@ -77,10 +76,9 @@ class DESED:
         feature_dir : str, directory to store the features
 
     """
-    def __init__(self, local_path="dataset", base_feature_dir="features",
+    def __init__(self, base_feature_dir="features",
                  recompute_features=False, compute_log=True):
 
-        self.local_path = local_path
         self.recompute_features = recompute_features
         self.compute_log = compute_log
 
@@ -105,13 +103,17 @@ class DESED:
             pd.DataFrame
             The dataframe containing the right features and labels
         """
-        meta_name = os.path.join(self.local_path, tsv_path)
+        meta_name = os.path.join(tsv_path)
         df_meta = self.get_df_from_meta(meta_name, nb_files)
         logger.info("{} Total file number: {}".format(meta_name, len(df_meta.filename.unique())))
+        if audio_dir is None:
+            audio_dir = meta_path_to_audio_dir(tsv_path)
         if download:
             # Get only one filename once
             filenames = df_meta.filename.drop_duplicates()
-            self.download(filenames, audio_dir, nb_files)
+            if nb_files is not None:
+                filenames = filenames.sample(nb_files)
+            self.download(filenames, audio_dir)
         return self.extract_features_from_df(df_meta, audio_dir)
 
     def get_feature_file(self, filename):
@@ -214,23 +216,35 @@ class DESED:
         return list(set(classes))
 
     @staticmethod
-    def get_subpart_data(df, nb_files):
+    def get_subpart_data(df, nb_files, pattern_ss=None):
+        """Get a subpart of a dataframe (only the number of files specified), if ss, corresponds to the number of folder
+        Args:
+            meta_name : str, path of the tsv file to extract the df
+            nb_files: int, the number of file to take in the dataframe if taking a small part of the dataset.
+            pattern_ss: str, if nb_files is not None, the pattern is needed to get same ss than soundscapes
+        Returns:
+            dataframe
+        """
         column = "filename"
         if not nb_files > len(df[column].unique()):
-            filenames = df[column].drop_duplicates().sample(nb_files, random_state=10)
+            filenames = df[column].drop_duplicates()
+            if pattern_ss:
+                filenames = filenames.apply(lambda x: x.split(pattern_ss)[0])
+            # sort_values and random_state are used to have the same filenames for similar datasets (eg, normal and ss)
+            filenames = filenames.sort_values().sample(nb_files, random_state=10)
             df = df[df[column].isin(filenames)].reset_index(drop=True)
             logger.debug("Taking subpart of the data, len : {}, df_len: {}".format(nb_files, len(df)))
         return df
 
     @staticmethod
-    def get_df_from_meta(meta_name, nb_files=None):
+    def get_df_from_meta(meta_name, nb_files=None, pattern_ss=None):
         """
         Extract a pandas dataframe from a tsv file
 
         Args:
             meta_name : str, path of the tsv file to extract the df
             nb_files: int, the number of file to take in the dataframe if taking a small part of the dataset.
-
+            pattern_ss: str, if nb_files is not None, the pattern is needed to get same ss than soundscapes
         Returns:
             dataframe
         """

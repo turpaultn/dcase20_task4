@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import torch
 import json
-from utils.Logger import create_logger
+from utilities.Logger import create_logger
 
 
 logger = create_logger(__name__)
@@ -133,7 +133,7 @@ class Scaler(object):
         self.std_ = self.std(variance)
 
 
-class ScalerPerAudio(object):
+class ScalerPerAudio:
     """Normalize inputs one by one
         Args:
             normalization: str, in {"global", "per_channel"}
@@ -147,7 +147,7 @@ class ScalerPerAudio(object):
     def normalize(self, spectrogram):
         """ Apply the transformation on data
             Args:
-                spectrogram: np.array, the data to be modified
+                spectrogram: np.array, the data to be modified, assume to have 3 dimensions
 
             Returns:
                 np.array
@@ -160,20 +160,22 @@ class ScalerPerAudio(object):
             tensor = False
 
         if self.normalization == "global":
-            if self.type_norm == "mean":
-                res_data = (spectrogram - spectrogram.mean()) / spectrogram.std()
-            elif self.type_norm == "max":
-                res_data = spectrogram - spectrogram.max()
-            else:
-                raise NotImplementedError("No other type_norm implemented except {'mean', 'max'}")
+            axis = None
+        elif self.normalization == "per_band":
+            axis = 0
+        else:
+            raise NotImplementedError("normalization is 'global' or 'per_band'")
 
-        elif self.normalization == "per_channel":
-            if self.type_norm == "mean":
-                res_data = (spectrogram - spectrogram.mean(0)) / spectrogram.std(0)
-            elif self.type_norm == "max":
-                res_data = spectrogram - spectrogram.max(0)
-            else:
-                raise NotImplementedError("No other normalization implemented except {'global', 'per_channel'}")
+        if self.type_norm == "standard":
+            res_data = (spectrogram - spectrogram[0].mean(axis)) / spectrogram[0].std(axis)
+        elif self.type_norm == "max":
+            res_data = spectrogram[0] / np.abs(spectrogram[0].max(axis))
+        elif self.type_norm == "min-max":
+            res_data = (spectrogram - spectrogram[0].min(axis)) / (spectrogram[0].max(axis) - spectrogram[0].min(axis))
+            if np.isnan(res_data).any():
+                print("nan")
+        else:
+            raise NotImplementedError("No other type_norm implemented except {'standard', 'max', 'min-max'}")
 
         if tensor:
             res_data = torch.Tensor(res_data)

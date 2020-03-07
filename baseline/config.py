@@ -4,19 +4,34 @@ import pandas as pd
 
 workspace = ".."
 # DESED Paths
-weak = 'dataset/metadata/train/weak.tsv'
-unlabel = 'dataset/metadata/train/unlabel_in_domain.tsv'
-synthetic = 'dataset/metadata/train/synthetic.tsv'
-validation = 'dataset/metadata/validation/validation.tsv'
-test2018 = 'dataset/metadata/validation/test_dcase2018.tsv'
-eval2018 = 'dataset/metadata/validation/eval_dcase2018.tsv'
-eval_desed = "dataset/metadata/eval/public.tsv"
+weak = os.path.join(workspace, 'dataset/metadata/train/weak.tsv')
+unlabel = os.path.join(workspace, 'dataset/metadata/train/unlabel_in_domain.tsv')
+synthetic = os.path.join(workspace, 'dataset/metadata/train/synthetic20_reverb/soundscapes.tsv')
+validation = os.path.join(workspace, 'dataset/metadata/validation/validation.tsv')
+test2018 = os.path.join(workspace, 'dataset/metadata/validation/test_dcase2018.tsv')
+eval2018 = os.path.join(workspace, 'dataset/metadata/validation/eval_dcase2018.tsv')
+eval_desed = os.path.join(workspace, "dataset/metadata/eval/public.tsv")
 
-audio_validation_dir = 'dataset/metadata/validation/'
+# Useful because not just metadata replaced by audio, there are subsets (eval2018, test2018) so we specify the audio
+audio_validation_dir = os.path.join(workspace, 'dataset/audio/validation')
 
+## Separated data
+weak_ss = os.path.join(workspace, 'dataset/audio/train/weak_ss/ss_computed')
+unlabel_ss = os.path.join(workspace, 'dataset/audio/train/unlabel_in_domain_ss/ss_computed')
+synthetic_ss = os.path.join(workspace, 'dataset/audio/train/synthetic20_reverb/ss_computed')
+validation_ss = os.path.join(workspace, 'dataset/audio/validation/validation_ss/ss_computed')
+test2018_ss = os.path.join(workspace, 'dataset/audio/validation/test_dcase2018_ss/ss_computed')
+eval2018_ss = os.path.join(workspace, 'dataset/audio/validation/eval_dcase2018_ss/ss_computed')
+eval_desed_ss = os.path.join(workspace, "dataset/audio/eval/public_ss/ss_computed")
+
+
+normalization_on = "per_band"
+normalization_type = "min-max"
+
+ref_db = -55
 # config
 # prepare_data
-sample_rate = 44100
+sample_rate = 16000
 n_window = 2048
 hop_length = 511
 n_mels = 64
@@ -24,7 +39,7 @@ max_len_seconds = 10.
 max_frames = math.ceil(max_len_seconds * sample_rate / hop_length)
 
 f_min = 0.
-f_max = 22050.
+f_max = 8000.
 
 lr = 0.0001
 initial_lr = 0.
@@ -50,7 +65,7 @@ checkpoint_epochs = 1
 save_best = True
 
 file_path = os.path.abspath(os.path.dirname(__file__))
-classes = pd.read_csv(os.path.join(file_path, "..", validation), sep="\t").event_label.dropna().sort_values().unique()
+classes = pd.read_csv(os.path.join(file_path, validation), sep="\t").event_label.dropna().sort_values().unique()
 
 crnn_kwargs = {"n_in_channel": 1, "nclass": len(classes), "attention": True, "n_RNN_cell": 64,
                "n_layers_RNN": 2,
