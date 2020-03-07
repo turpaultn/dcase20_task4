@@ -36,6 +36,6 @@ wget -O FUSS_baseline_model.tar.gz https://zenodo.org/record/3694384/files/FUSS_
 tar -xzf FUSS_baseline_model.tar.gz
 #rm FUSS_baseline_model.tar.gz
 
-wget -O $FUSS_rir_data.tar.gz https://zenodo.org/record/3694384/files/FUSS_rir_data.tar.gz?download=1
+wget -O FUSS_rir_data.tar.gz https://zenodo.org/record/3694384/files/FUSS_rir_data.tar.gz?download=1
 tar -xzf FUSS_rir_data.tar.gz
 #rm FUSS_rir_data.tar.gz
