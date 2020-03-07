@@ -11,6 +11,8 @@ pip install dcase_util
 pip install sed-eval
 pip install psds_eval@git+https://github.com/audioanalytic/psds_eval
 pip install scaper
+
+# Should be done only if you did not already installed it to download the data
 pip install --upgrade desed@git+https://github.com/turpaultn/DESED
 
 # Source separation:
