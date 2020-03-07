@@ -17,6 +17,7 @@ import pandas as pd
 import numpy as np
 
 import torch
+from desed.utils import create_folder
 from torch.utils.data import DataLoader
 from torch import nn
 
@@ -181,7 +182,9 @@ def get_feature_file_ss(filename, ss_df, feature_dir, ss_pattern="_events"):
         fname = os.path.join(feature_dir, os.path.splitext(fname)[0] + ".npy")
         data = np.load(fname)
         loaded_data.append(data)
-    return np.array(loaded_data)
+    arr_loaded_data = np.array(loaded_data)
+    print(arr_loaded_data.shape)
+    return arr_loaded_data
 
 def add_ss_df(data_df, data_ss_df):
     df_data = data_df.copy()
@@ -238,6 +241,7 @@ def create_tsv_from_ss_folder(ss_folder, out_tsv=None):
     not_only_dir = False
     if out_tsv is None:
         out_tsv = audio_dir_to_meta_path(ss_folder)
+    create_folder(os.path.dirname(out_tsv))
 
     if not os.path.exists(out_tsv):
         logger.info(f"generating: {out_tsv}, from {ss_folder}")
@@ -261,24 +265,24 @@ def create_tsv_from_ss_folder(ss_folder, out_tsv=None):
 
 # Todo reput as normal
 def get_dfs_ss(desed_dataset, reduced_nb_data):
-    # weak_csv = create_tsv_from_ss_folder(cfg.weak_ss)
-    # unlabel_csv = create_tsv_from_ss_folder(cfg.unlabel_ss)
+    weak_csv = create_tsv_from_ss_folder(cfg.weak_ss)
+    unlabel_csv = create_tsv_from_ss_folder(cfg.unlabel_ss)
     synthetic_csv = create_tsv_from_ss_folder(cfg.synthetic_ss)
-    # validation_csv = create_tsv_from_ss_folder(cfg.validation_ss)
+    validation_csv = create_tsv_from_ss_folder(cfg.validation_ss)
 
     # Extract features, audio_dir="" since we put the full path in the dataframe
-    # weak_df = desed_dataset.initialize_and_get_df(weak_csv, nb_files=reduced_nb_data)
-    # unlabel_df = desed_dataset.initialize_and_get_df(unlabel_csv, nb_files=reduced_nb_data)
+    weak_df = desed_dataset.initialize_and_get_df(weak_csv, nb_files=reduced_nb_data)
+    unlabel_df = desed_dataset.initialize_and_get_df(unlabel_csv, nb_files=reduced_nb_data)
     # Event if synthetic not used for training, used on validation purpose
     synthetic_df = desed_dataset.initialize_and_get_df(synthetic_csv, nb_files=reduced_nb_data, download=False)
-    # validation_df = desed_dataset.initialize_and_get_df(validation_csv, audio_dir=cfg.audio_validation_dir,
-    #                                                     nb_files=reduced_nb_data)
+    validation_df = desed_dataset.initialize_and_get_df(validation_csv, audio_dir=cfg.audio_validation_dir,
+                                                        nb_files=reduced_nb_data)
 
     data_dfs = {
-        # "weak": weak_df,
-        # "unlabel": unlabel_df,
+        "weak": weak_df,
+        "unlabel": unlabel_df,
         "synthetic": synthetic_df,
-        # "validation": validation_df
+        "validation": validation_df
     }
     return data_dfs
 
@@ -321,6 +325,22 @@ if __name__ == '__main__':
 
     if use_separated_sources:
         dfs_ss = get_dfs_ss(dataset, reduced_number_of_data)
+        add_axis_conv = False
+        get_feature_file_weak = functools.partial(get_feature_file_ss, ss_df=dfs_ss["weak"],
+                                                  feature_dir=dataset.feature_dir)
+        get_feature_file_unlabel = functools.partial(get_feature_file_ss, ss_df=dfs_ss["unlabel"],
+                                                     feature_dir=dataset.feature_dir)
+        get_feature_file_synth = functools.partial(get_feature_file_ss, ss_df=dfs_ss["synthetic"],
+                                                   feature_dir=dataset.feature_dir)
+        get_feature_file_validation = functools.partial(get_feature_file_ss, ss_df=dfs_ss["validation"],
+                                                        feature_dir=dataset.feature_dir)
+
+    else:
+        add_axis_conv = True
+        get_feature_file_weak = dataset.get_feature_file
+        get_feature_file_unlabel = dataset.get_feature_file
+        get_feature_file_synth = dataset.get_feature_file
+        get_feature_file_validation = dataset.get_feature_file
 
     dfs = get_dfs(dataset, reduced_number_of_data)
 
@@ -336,19 +356,17 @@ if __name__ == '__main__':
     many_hot_encoder = ManyHotEncoder(classes, n_frames=cfg.max_frames // pooling_time_ratio)
 
     scaler = ScalerPerAudio(cfg.normalization_on, cfg.normalization_type)
-    transforms = get_transforms(cfg.max_frames, scaler, augment_type="noise")
+    transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv=add_axis_conv, augment_type="noise")
 
     train_weak_data = DataLoadDf(dfs["train_weak"],
-                                 dataset.get_feature_file, many_hot_encoder.encode_strong_df,
+                                 get_feature_file_weak, many_hot_encoder.encode_strong_df,
                                  transform=transforms)
     unlabel_data = DataLoadDf(dfs["unlabel"],
-                              dataset.get_feature_file, many_hot_encoder.encode_strong_df,
+                              get_feature_file_unlabel, many_hot_encoder.encode_strong_df,
                               transform=transforms)
 
-    get_feature_file_alias = functools.partial(get_feature_file_ss, ss_df=dfs_ss["synthetic"],
-                                               feature_dir=dataset.feature_dir)
     train_synth_data = DataLoadDf(dfs["train_synthetic"],
-                                  get_feature_file_alias, many_hot_encoder.encode_strong_df,
+                                  get_feature_file_synth, many_hot_encoder.encode_strong_df,
                                   transform=transforms)
 
     if not no_synthetic:
@@ -367,7 +385,7 @@ if __name__ == '__main__':
 
     # logger.debug(scaler.mean_)
 
-    # transforms = get_transforms(cfg.max_frames, scaler, augment_type="noise")
+    # transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv=add_axis_conv, augment_type="noise")
     # for i in range(len(list_dataset)):
     #     list_dataset[i].set_transform(transforms)
 
@@ -377,19 +395,19 @@ if __name__ == '__main__':
 
     training_data = DataLoader(concat_dataset, batch_sampler=sampler)
 
-    transforms_valid = get_transforms(cfg.max_frames, scaler=scaler)
+    transforms_valid = get_transforms(cfg.max_frames, scaler=scaler, add_axis_conv=add_axis_conv)
     valid_synth_data = DataLoadDf(dfs["valid_synthetic"],
-                                  dataset.get_feature_file, many_hot_encoder.encode_strong_df,
+                                  get_feature_file_synth, many_hot_encoder.encode_strong_df,
                                   transform=transforms_valid, return_indexes=True)
     valid_synth_dataloader = DataLoader(valid_synth_data, batch_size=cfg.batch_size)
     valid_weak_data = DataLoadDf(dfs["valid_weak"],
-                                 dataset.get_feature_file, many_hot_encoder.encode_weak,
+                                 get_feature_file_weak, many_hot_encoder.encode_weak,
                                  transform=transforms_valid)
 
     # Eval 2018
     eval_2018_df = dataset.initialize_and_get_df(cfg.eval2018, audio_dir=cfg.audio_validation_dir,
                                                  nb_files=reduced_number_of_data)
-    eval_2018 = DataLoadDf(eval_2018_df, dataset.get_feature_file, many_hot_encoder.encode_strong_df,
+    eval_2018 = DataLoadDf(eval_2018_df, get_feature_file_validation, many_hot_encoder.encode_strong_df,
                            transform=transforms_valid)
 
     # ##############

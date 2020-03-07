@@ -216,24 +216,35 @@ class DESED:
         return list(set(classes))
 
     @staticmethod
-    def get_subpart_data(df, nb_files):
+    def get_subpart_data(df, nb_files, pattern_ss=None):
+        """Get a subpart of a dataframe (only the number of files specified), if ss, corresponds to the number of folder
+        Args:
+            meta_name : str, path of the tsv file to extract the df
+            nb_files: int, the number of file to take in the dataframe if taking a small part of the dataset.
+            pattern_ss: str, if nb_files is not None, the pattern is needed to get same ss than soundscapes
+        Returns:
+            dataframe
+        """
         column = "filename"
         if not nb_files > len(df[column].unique()):
+            filenames = df[column].drop_duplicates()
+            if pattern_ss:
+                filenames = filenames.apply(lambda x: x.split(pattern_ss)[0])
             # sort_values and random_state are used to have the same filenames for similar datasets (eg, normal and ss)
-            filenames = df[column].drop_duplicates().sort_values().sample(nb_files, random_state=10)
+            filenames = filenames.sort_values().sample(nb_files, random_state=10)
             df = df[df[column].isin(filenames)].reset_index(drop=True)
             logger.debug("Taking subpart of the data, len : {}, df_len: {}".format(nb_files, len(df)))
         return df
 
     @staticmethod
-    def get_df_from_meta(meta_name, nb_files=None):
+    def get_df_from_meta(meta_name, nb_files=None, pattern_ss=None):
         """
         Extract a pandas dataframe from a tsv file
 
         Args:
             meta_name : str, path of the tsv file to extract the df
             nb_files: int, the number of file to take in the dataframe if taking a small part of the dataset.
-
+            pattern_ss: str, if nb_files is not None, the pattern is needed to get same ss than soundscapes
         Returns:
             dataframe
         """

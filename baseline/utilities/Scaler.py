@@ -147,7 +147,7 @@ class ScalerPerAudio:
     def normalize(self, spectrogram):
         """ Apply the transformation on data
             Args:
-                spectrogram: np.array, the data to be modified
+                spectrogram: np.array, the data to be modified, assume to have 3 dimensions
 
             Returns:
                 np.array
@@ -161,20 +161,21 @@ class ScalerPerAudio:
 
         if self.normalization == "global":
             axis = None
-        elif self.normalization == "per_channel":
+        elif self.normalization == "per_band":
             axis = 0
         else:
-            raise NotImplementedError("normalization is 'global' or 'per_channel'")
+            raise NotImplementedError("normalization is 'global' or 'per_band'")
 
-        if self.normalization == "global":
-            if self.type_norm == "standard":
-                res_data = (spectrogram - spectrogram.mean(axis)) / spectrogram.std(axis)
-            elif self.type_norm == "max":
-                res_data = spectrogram / spectrogram.max(axis)
-            elif self.type_norm == "min-max":
-                res_data = (spectrogram - spectrogram.min(axis)) / (spectrogram.max(axis) - spectrogram.min(axis))
-            else:
-                raise NotImplementedError("No other type_norm implemented except {'standard', 'max', 'min-max'}")
+        if self.type_norm == "standard":
+            res_data = (spectrogram - spectrogram[0].mean(axis)) / spectrogram[0].std(axis)
+        elif self.type_norm == "max":
+            res_data = spectrogram[0] / np.abs(spectrogram[0].max(axis))
+        elif self.type_norm == "min-max":
+            res_data = (spectrogram - spectrogram[0].min(axis)) / (spectrogram[0].max(axis) - spectrogram[0].min(axis))
+            if np.isnan(res_data).any():
+                print("nan")
+        else:
+            raise NotImplementedError("No other type_norm implemented except {'standard', 'max', 'min-max'}")
 
         if tensor:
             res_data = torch.Tensor(res_data)

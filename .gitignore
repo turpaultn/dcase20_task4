@@ -21,6 +21,7 @@ missing_files/
 stored_data/
 baseline/*predictions*
 
+synthetic20*
 # Generated data by source separation
 dataset/metadata/eval/generated
 ss_computed.tsv
