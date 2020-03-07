@@ -23,9 +23,11 @@ baseline/*predictions*
 
 # Generated data by source separation
 dataset/metadata/eval/generated
-# SS based
-model_ckpt/
-
+ss_computed.tsv
 
 # Temporary SS
-dcase2020_inference_source_separation/
+sound-separation/
+
+
+# Test on cluster
+runme_explor.sh
