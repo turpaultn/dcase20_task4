@@ -12,8 +12,6 @@ cd ${BASE_PATH}
 #############
 # DESED Soundbank
 #############
-# If not already installed, install DESED
-pip install desed@git+https://github.com/turpaultn/DESED
 mkdir synthetic
 cd synthetic
 echo "Download and extract soundbank"
