@@ -66,8 +66,8 @@ if __name__ == '__main__':
     if len(wav_list) == 0:
         raise IndexError(f"Empty wav_list, you need to give a valid audio_path. Not valid: {f_args.audio_path}")
     model_dir = f_args.model_dir
-    checkpoint_path = osp.join(model_dir, 'model2_model.ckpt-1901521')
-    metagraph_path = osp.join(model_dir, 'model2_inference.meta')
+    checkpoint_path = osp.join(model_dir, 'baseline_model')
+    metagraph_path = osp.join(model_dir, 'baseline_inference.meta')
     ss_model = inference.SeparationModel(checkpoint_path, metagraph_path)
 
     main(wav_list, ss_model, f_args.output_folder)
