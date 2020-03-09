@@ -4,10 +4,24 @@
 
 # We assume you're in the right conda envrionment
 
-BASE_PATH=..
-cd ${BASE_PATH}
-
 ########### Shouldn't be changed after that (except if you want TUT background too)
+
+#############
+# DESED recorded data
+#############
+
+# If not already done
+echo "download real data audio files ... ~23GB"
+cd data_generation
+python download_real.py --basedir=../dataset
+cd ..
+
+# Copy or move data
+cp -r metadata ${ROOTDIR}/
+cp -r missing_files ${ROOTDIR}/
+echo "moving real audio files"
+mkdir -p ${ROOTDIR}/audio/
+mv audio/* ${ROOTDIR}/audio/
 
 #############
 # DESED Soundbank

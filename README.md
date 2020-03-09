@@ -19,6 +19,16 @@ A simplified installation procedure example is provide below for python 3.6 base
 2. launch `conda_create_environment.sh` (recommended line by line)
 
 ## Dataset
+
+### Description
+- The **sound event detection** dataset is using [desed] dataset.
+- To compute the reverberated data and the separated sources, we use [fuss_repo] 
+(included as `sound-separation/` here (using subtree))
+	- To compute the reverberated sounds, we use [fuss] rir_data and 
+	`sound-separation/datasets/fuss/reverberate_and_mix.py`
+	- To compute **source separation**, we use [fuss] baseline model and 
+	`sound-separation/models/dcase2020_fuss_baseline/inference.py`
+
 ### Base dataset
 The dataset for sound event detection of DCASE2020 task 4 is composed of:
 - Train:
@@ -34,11 +44,11 @@ The dataset for sound event detection of DCASE2020 task 4 is composed of:
 - Train:
 	- synthetic20/soundscapes [2595 files] (DESED) --> base files, not used to train baseline
 	- *synthetic20_reverb/soundscapes [2595 files] (uses [fuss] rir_data and [fuss_scripts])
-	- **synthetic20_reverb/ss_computed [2595 folders] (uses [fuss] baseline_model and [fuss_scripts])
-	- **weak_ss/ss_computed [1578 folders] (uses [fuss] baseline_model and [fuss_scripts])
-	- **unlabel_in_domain_ss/ss_computed [14 412 folders] (uses [fuss] baseline_model and [fuss_scripts])
+	- **synthetic20_reverb/separated_sources [2595 folders] (uses [fuss] baseline_model and [fuss_scripts])
+	- **weak_ss/separated_sources [1578 folders] (uses [fuss] baseline_model and [fuss_scripts])
+	- **unlabel_in_domain_ss/separated_sources [14 412 folders] (uses [fuss] baseline_model and [fuss_scripts])
 - **Validation
-	- validation_ss/ss_computed [1168 files] (uses [fuss] baseline_model and [fuss_scripts])
+	- validation_ss/separated_sources [1168 files] (uses [fuss] baseline_model and [fuss_scripts])
 
 *Used in baseline without source separation
 **Used in baseline with source separation
@@ -52,38 +62,11 @@ In the [`scripts/`](scripts) folder, you can find the different steps to generat
 
 	
 ### DESED Dataset
-See [Desed repo][desed] or [Desed_website][desed_website] for more info.
-
 **It is likely that you'll have download issues with the real recordings.
 At the end of the download, please send a mail with the TSV files
 created in the `missing_files` directory.** (in priority to Nicolas Turpault and Romain Serizel)
 
-#### Synthetic data (1.8Gb)
-Freesound dataset [1,2]: A subset of [FSD] is used as foreground sound events for the synthetic subset of the DESED dataset. 
-FSD is a large-scale, general-purpose audio dataset composed of Freesound content annotated with labels from the AudioSet Ontology [3].
-
-SINS dataset [4]: The derivative of the SINS dataset used for DCASE2018 task 5 is used as background for the synthetic subset of the dataset for DCASE 2019 task 4.
-The SINS dataset contains a continuous recording of one person living in a vacation home over a period of one week.
-It was collected using a network of 13 microphone arrays distributed over the entire home.
-The microphone array consists of 4 linearly arranged microphones.
-
-The synthetic set is composed of 10 sec audio clips generated with [Scaper] [5].
-The foreground events are obtained from FSD.
-Each event audio clip was verified manually to ensure that the sound quality and the event-to-background ratio were sufficient to be used an isolated event. 
-We also verified that the event was actually dominant in the clip and we controlled if the event onset and offset are present in the clip. Each selected clip was then segmented when needed to remove silences before and after the event and between events when the file contained multiple occurrences of the event class.
-
-
-##### License
-All sounds comming from FSD are released under Creative Commons licences.
-**Synthetic sounds can only be used for competition purposes until the full CC license list is made available at the end of the competition.**
-
-
-#### Real recordings (23.4Gb):
-Subset of [Audioset] [3].
-Audioset: Real recordings are extracted from Audioset. It consists of an expanding ontology of 632 sound event classes and a collection of 2 million human-labeled 10-second sound clips (less than 21% are shorter than 10-seconds) drawn from 2 million Youtube videos. The ontology is specified as a hierarchical graph of event categories, covering a wide range of human and animal sounds, musical instruments and genres, and common everyday environmental sounds.
-
-The download/extraction process can take approximately 4 hours.
-If you experience problems during the download of this subset please contact the task organizers.
+See [Desed repo][desed] or [Desed_website][desed_website] for more info.
 
 ### Annotation format
 
@@ -163,6 +146,7 @@ IcETRAN conference, Srebrno Jezero, Serbia, June 2019.
 [evaluation_dataset]: https://zenodo.org/record/3588172
 [FSD]: https://datasets.freesound.org/fsd/
 [fuss]: https://zenodo.org/record/3694384/
+[fuss_repo]: https://github.com/google-research/sound-separation
 [fuss_scripts]: https://github.com/google-research/sound-separation/tree/master/datasets/fuss
 [paper2019-description]: https://hal.inria.fr/hal-02160855
 [paper2019-eval]: https://hal.inria.fr/hal-02355573

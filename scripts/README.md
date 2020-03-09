@@ -1,12 +1,10 @@
 ## Explanation
 
-NOTE: Before using step 4 you need to be sure you downloaded the recorded soundscapes from DESED.
-See [DESED repo][desed_repo] or [DESED website][desed_website] for more information.
-
 The scripts defines the different steps to download the data.
 
 - 1- It downloads all the necessary equipment:
-	- Soundbank training for [DESED][desed_synth]
+	- Download recorded data like in DESED repo.
+	- Soundbank training from DESED, see [DESED_synth][desed_synth]
 	- Download background training to be included in soundbank
 	- Download RIR from [FUSS]
 	- Download baseline model from Fuss
