@@ -7,10 +7,10 @@ BASE_DATASET=../dataset
 AUDIO_PATH_WEAK=${BASE_DATASET}/audio/train/weak
 AUDIO_PATH_UNLABEL=${BASE_DATASET}/audio/train/unlabel_in_domain
 AUDIO_PATH_VALIDATION=${BASE_DATASET}/audio/validation
-GENERATED_PATTERN_RECORDED=_ss/ss_computed  # The pattern to add after the audio path of where to put the generated data
+GENERATED_PATTERN_RECORDED=_ss/separated_sources  # The pattern to add after the audio path of where to put the generated data
 
 AUDIO_PATH_SYNTH=${BASE_DATASET}/audio/train/synthetic20_reverb/soundscapes
-GENERATED_SYNTH=${BASE_DATASET}/audio/train/synthetic20_reverb/ss_computed
+GENERATED_SYNTH=${BASE_DATASET}/audio/train/synthetic20_reverb/separated_sources
 
 MODEL_DIR=../baseline_model  # Path pointing to google folder model
 SCRIPTS_PATH=../data_generation
