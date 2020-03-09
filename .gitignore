@@ -26,9 +26,5 @@ synthetic20*
 dataset/metadata/eval/generated
 ss_computed.tsv
 
-# Temporary SS
-sound-separation/
-
-
 # Test on cluster
 runme_explor.sh
