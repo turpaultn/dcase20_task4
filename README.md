@@ -7,6 +7,7 @@
 
 ## Updates
 - 7th March 2020: update the `DESED_synth_dcase20_train_jams.tar`on [DESED_synthetic][synthetic_dataset]
+- 9th March 2020: update `scripts` to get the recorded data in the download.
 
 ## Dependencies
 

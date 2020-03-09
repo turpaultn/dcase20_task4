@@ -3,7 +3,7 @@
 The scripts defines the different steps to download the data.
 
 - 1- It downloads all the necessary equipment:
-	- Download recorded data like in DESED repo.
+	- Download recorded data corresponding to DESED dataset. (see contacts in [repo README][readme_repo] for missing_files)
 	- Soundbank training from DESED, see [DESED_synth][desed_synth]
 	- Download background training to be included in soundbank
 	- Download RIR from [FUSS]
@@ -24,3 +24,5 @@ These data are used to train the baseline using Source separation.
 [desed_repo]: https://github.com/turpaultn/DESED
 [desed_website]: https://project.inria.fr/desed/dcase-challenge/dcase-2020-task-4/
 [FUSS]: https://zenodo.org/record/3694384/
+
+[readme_repo]: ../README.md
