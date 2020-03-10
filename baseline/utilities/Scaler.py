@@ -173,11 +173,12 @@ class ScalerPerAudio:
         elif self.type_norm == "max":
             res_data = spectrogram[0] / np.abs(spectrogram[0].max(axis))
         elif self.type_norm == "min-max":
-            res_data = (spectrogram - spectrogram[0].min(axis)) / (spectrogram[0].max(axis) - spectrogram[0].min(axis))
+            res_data = (spectrogram - spectrogram[0].min(axis)) / (spectrogram[0].max(axis) - spectrogram[0].min(axis)
+                                                                   + np.finfo(float).eps)
         else:
             raise NotImplementedError("No other type_norm implemented except {'standard', 'max', 'min-max'}")
         if np.isnan(res_data).any():
-            res_data = np.nan_to_num(res_data)
+            res_data = np.nan_to_num(res_data, posinf=0, neginf=0)
             warnings.warn("Trying to divide by zeros while normalizing spectrogram, replacing nan by 0")
 
         if tensor:

@@ -85,6 +85,7 @@ class ApplyLog(Transform):
 
 def pad_trunc_seq(x, max_len):
     """Pad or truncate a sequence data to a fixed length.
+    The sequence should be on axis -2.
 
     Args:
       x: ndarray, input sequence data.
@@ -93,17 +94,14 @@ def pad_trunc_seq(x, max_len):
     Returns:
       ndarray, Padded or truncated input sequence data.
     """
-    length = len(x)
     shape = x.shape
-    if length < max_len:
-        pad_shape = (max_len - length,) + shape[1:]
-        pad = np.zeros(pad_shape)
-        x_new = np.concatenate((x, pad), axis=0)
-    elif length > max_len:
-        x_new = x[0:max_len]
+    if shape[-2] <= max_len:
+        padded = max_len - shape[-2]
+        padded_shape = ((0, 0),)*len(shape[:-2]) + ((0, padded), (0, 0))
+        x = np.pad(x, padded_shape)
     else:
-        x_new = x
-    return x_new
+        x = x[..., :max_len, :]
+    return x
 
 
 class PadOrTrunc(Transform):
