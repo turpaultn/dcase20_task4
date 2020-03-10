@@ -175,6 +175,7 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
 def get_feature_file_ss(filename, ss_df, feature_dir, ss_pattern="_events"):
     fnames_no_pattern = ss_df.filename.apply(lambda x: x.split(ss_pattern)[0])
     fname_to_match = os.path.splitext(filename)[0]
+
     filenames_to_load = ss_df.filename[fnames_no_pattern == fname_to_match].tolist()
     filenames_to_load.append(filename)
     loaded_data = []
