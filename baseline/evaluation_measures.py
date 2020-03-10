@@ -208,11 +208,11 @@ def macro_f_measure(tp, fp, fn):
 
 def get_predictions(model, valid_dataloader, decoder, pooling_time_ratio=1, save_predictions=None):
     prediction_df = pd.DataFrame()
-    for i, ((input, _), indexes) in enumerate(valid_dataloader):
+    for i, ((input_data, _), indexes) in enumerate(valid_dataloader):
         indexes = indexes.numpy()
-        input = to_cuda_if_available(input)
+        input_data = to_cuda_if_available(input_data)
 
-        pred_strong, _ = model(input)
+        pred_strong, _ = model(input_data)
         pred_strong = pred_strong.cpu()
         pred_strong = pred_strong.detach().numpy()
         if i == 0:
