@@ -98,7 +98,7 @@ def pad_trunc_seq(x, max_len):
     if shape[-2] <= max_len:
         padded = max_len - shape[-2]
         padded_shape = ((0, 0),)*len(shape[:-2]) + ((0, padded), (0, 0))
-        x = np.pad(x, padded_shape)
+        x = np.pad(x, padded_shape, mode="constant")
     else:
         x = x[..., :max_len, :]
     return x

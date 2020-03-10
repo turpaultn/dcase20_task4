@@ -169,9 +169,9 @@ class ScalerPerAudio:
             raise NotImplementedError("normalization is 'global' or 'per_band'")
 
         if self.type_norm == "standard":
-            res_data = (spectrogram - spectrogram[0].mean(axis)) / spectrogram[0].std(axis)
+            res_data = (spectrogram - spectrogram[0].mean(axis)) / (spectrogram[0].std(axis) + np.finfo(float).eps)
         elif self.type_norm == "max":
-            res_data = spectrogram[0] / np.abs(spectrogram[0].max(axis))
+            res_data = spectrogram[0] / (np.abs(spectrogram[0].max(axis)) + np.finfo(float).eps)
         elif self.type_norm == "min-max":
             res_data = (spectrogram - spectrogram[0].min(axis)) / (spectrogram[0].max(axis) - spectrogram[0].min(axis)
                                                                    + np.finfo(float).eps)
