@@ -19,7 +19,7 @@ from evaluation_measures import compute_sed_eval_metrics, get_predictions, \
 from utilities.utils import ManyHotEncoder, to_cuda_if_available, get_transforms, generate_tsv_from_isolated_events, \
     generate_tsv_wav_durations
 from utilities.Logger import create_logger
-from utilities.Scaler import Scaler
+from utilities.Scaler import Scaler, ScalerPerAudio
 from models.CRNN import CRNN
 import config as cfg
 
@@ -30,9 +30,10 @@ logger = create_logger(__name__)
 
 
 def _load_crnn(state):
-    crnn_kwargs = state["ss_model"]["kwargs"]
-    crnn = CRNN(**crnn_kwargs)
-    crnn.load(parameters=state["ss_model"]["state_dict"])
+    crnn_args = state["model"]["args"]
+    crnn_kwargs = state["model"]["kwargs"]
+    crnn = CRNN(*crnn_args, **crnn_kwargs)
+    crnn.load(parameters=state["model"]["state_dict"])
     crnn.eval()
     crnn = to_cuda_if_available(crnn)
     logger.info("Model loaded at epoch: {}".format(state["epoch"]))
@@ -40,7 +41,14 @@ def _load_crnn(state):
 
 
 def _load_scaler(state):
-    scaler = Scaler()
+    scaler_state = state["scaler"]
+    type_sc = scaler_state["type"]
+    if type_sc == "ScalerPerAudio":
+        scaler = ScalerPerAudio(*scaler_state["args"])
+    elif type_sc == "Scaler":
+        scaler = Scaler()
+    else:
+        raise NotImplementedError("Not the right type of Scaler has been saved in state")
     scaler.load_state_dict(state["scaler"])
     return scaler
 
@@ -92,8 +100,10 @@ def test_model(state, gtruth_df, save_preds_path=None, audio_source=None, nb_fil
 def test_model_ss(state, gtruth_df, folder_sources=None, pattern_isolated_events="_events",
                   nb_files=None, save_preds_path=None):
     isolated_ev_df = generate_tsv_from_isolated_events(folder_sources)
+    fnames_to_match = isolated_ev_df.filename.apply(lambda x: (x.split(pattern_isolated_events)[0] + ".wav"))
+    to_pred_df = gtruth_df[gtruth_df.filename.isin(fnames_to_match)]
 
-    predictions = _get_predictions(state, isolated_ev_df, save_preds_path, audio_source=folder_sources,
+    predictions = _get_predictions(state, to_pred_df, save_preds_path, audio_source=folder_sources,
                                    nb_files=nb_files)
     print(predictions.head())
     predictions["filename"] = predictions.filename.apply(
