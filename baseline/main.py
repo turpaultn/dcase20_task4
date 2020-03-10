@@ -274,7 +274,7 @@ def get_dfs_ss(desed_dataset, reduced_nb_data, pattern_ss="_events"):
                                                        nb_files=reduced_nb_data, download=False, pattern_ss=pattern_ss)
     validation = desed_dataset.initialize_and_get_df(validation_tsv,
                                                      nb_files=reduced_nb_data, download=False, pattern_ss=pattern_ss)
-    eval2018 = desed_dataset.initialize_and_get_df(eval2018_tsv,
+    eval2018 = desed_dataset.initialize_and_get_df(eval2018_tsv, audio_dir=meta_path_to_audio_dir(validation_tsv),
                                                    nb_files=reduced_nb_data, download=False, pattern_ss=pattern_ss)
 
     data_dfs = {
@@ -351,6 +351,8 @@ if __name__ == '__main__':
                                                    feature_dir=dataset.feature_dir)
         get_feature_file_validation = functools.partial(get_feature_file_ss, ss_df=dfs_ss["validation"],
                                                         feature_dir=dataset.feature_dir)
+        get_feature_file_eval2018 = functools.partial(get_feature_file_ss, ss_df=dfs_ss["eval2018"],
+                                                        feature_dir=dataset.feature_dir)
 
     else:
         add_axis_conv = True
@@ -358,6 +360,7 @@ if __name__ == '__main__':
         get_feature_file_unlabel = dataset.get_feature_file
         get_feature_file_synth = dataset.get_feature_file
         get_feature_file_validation = dataset.get_feature_file
+        get_feature_file_eval2018 = dataset.get_feature_file
 
     dfs = get_dfs(dataset, reduced_number_of_data)
 
@@ -523,7 +526,7 @@ if __name__ == '__main__':
     compute_sed_eval_metrics(valid_predictions, dfs["validation"])
 
     # Eval 2018
-    eval18_data = DataLoadDf(dfs["eval2018"], get_feature_file_validation, many_hot_encoder.encode_strong_df,
+    eval18_data = DataLoadDf(dfs["eval2018"], get_feature_file_eval2018, many_hot_encoder.encode_strong_df,
                              transform=transforms_valid, return_indexes=True)
     eval18_dataloader = DataLoader(eval18_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
     eval18_predictions = get_predictions(crnn, eval18_dataloader, many_hot_encoder.decode_strong,
