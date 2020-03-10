@@ -152,5 +152,5 @@ IcETRAN conference, Srebrno Jezero, Serbia, June 2019.
 [paper2019-description]: https://hal.inria.fr/hal-02160855
 [paper2019-eval]: https://hal.inria.fr/hal-02355573
 [Scaper]: https://github.com/justinsalamon/scaper
-[synthetic_dataset]: https://zenodo.org/record/3700195
+[synthetic_dataset]: https://zenodo.org/record/3702397
 [website]: http://dcase.community/challenge2020/

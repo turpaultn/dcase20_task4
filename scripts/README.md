@@ -20,7 +20,7 @@ Reverberated data are used to train the baseline not using Source separation.
 These data are used to train the baseline using Source separation.
 
 
-[desed_synth]: https://zenodo.org/record/3700195
+[desed_synth]: https://zenodo.org/record/3702397
 [desed_repo]: https://github.com/turpaultn/DESED
 [desed_website]: https://project.inria.fr/desed/dcase-challenge/dcase-2020-task-4/
 [FUSS]: https://zenodo.org/record/3694384/
