@@ -2,6 +2,8 @@
 import argparse
 import glob
 import multiprocessing
+import os
+
 import numpy as np
 import os.path as osp
 import logging
@@ -15,7 +17,8 @@ from desed.utils import create_folder
 
 import config_data as cfg
 
-relative_path_ss_repo = osp.join(".")
+absolute_dir_path = os.path.abspath(os.path.dirname(__file__))
+relative_path_ss_repo = osp.join(absolute_dir_path, "..")
 base_dir_repo = osp.abspath(relative_path_ss_repo)
 sys.path.append(osp.join(base_dir_repo, "sound-separation", "datasets", "fuss"))
 

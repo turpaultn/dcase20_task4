@@ -29,7 +29,7 @@ mv audio/* ${ROOTDIR}/audio/
 mkdir synthetic
 cd synthetic
 echo "Download and extract soundbank"
-wget -O DESED_synth_soundbank.tar.gz https://zenodo.org/record/3571305/files/DESED_synth_soundbank.tar.gz?download=1
+wget -O DESED_synth_soundbank.tar.gz https://zenodo.org/record/3702397/files/DESED_synth_soundbank.tar.gz?download=1
 tar -xzf DESED_synth_soundbank.tar.gz
 #rm DESED_synth_soundbank.tar.gz
 echo "Done"
