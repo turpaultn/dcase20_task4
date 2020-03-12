@@ -20,11 +20,15 @@ features/
 missing_files/
 stored_data/
 baseline/*predictions*
+validation_meta.tsv
 
 synthetic20*
 # Generated data by source separation
 dataset/metadata/eval/generated
-ss_computed.tsv
+dataset/metadata/validation_ss
+separated_sources.tsv
 
 # Test on cluster
 runme_explor.sh
+baseline/res.txt
+baseline/logs

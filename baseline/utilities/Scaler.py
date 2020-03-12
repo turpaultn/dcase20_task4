@@ -11,7 +11,7 @@ from utilities.Logger import create_logger
 logger = create_logger(__name__)
 
 
-class Scaler(object):
+class Scaler:
     """
     operates on one or multiple existing datasets and applies operations
     """
