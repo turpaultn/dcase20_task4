@@ -17,7 +17,7 @@ ramp length in the same format, and returns a multiplier between
 import numpy as np
 
 
-def sigmoid_rampup(current, rampup_length):
+def exp_rampup(current, rampup_length):
     """Exponential rampup from https://arxiv.org/abs/1610.02242"""
     if rampup_length == 0:
         return 1.0

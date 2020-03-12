@@ -35,6 +35,27 @@ from utilities.utils import ManyHotEncoder, SaveBest, to_cuda_if_available, weig
     generate_tsv_from_isolated_events
 
 
+def adjust_learning_rate(optimizer, rampup_value, rampdown_value):
+    """ adjust the learning rate
+    Args:
+        optimizer: torch.Module, the optimizer to be updated
+        rampup_value: float, the float value between 0 and 1 that increases linearly
+
+    Returns:
+
+    """
+    # LR warm-up to handle large minibatch sizes from https://arxiv.org/abs/1706.02677
+    lr = rampup_value * rampdown_value * cfg.max_learning_rate
+    beta1 = rampdown_value * cfg.beta1_before_rampdown + (1. - rampdown_value) * cfg.beta1_after_rampdown
+    beta2 = (1. - rampup_value) * cfg.beta2_during_rampdup + rampup_value * cfg.beta2_after_rampup
+    weight_decay = (1 - rampup_value) * cfg.weight_decay_during_rampup + cfg.weight_decay_after_rampup * rampup_value
+
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+        param_group['betas'] = (beta1, beta2)
+        param_group['weight_decay'] = weight_decay
+
+
 def update_ema_variables(model, ema_model, alpha, global_step):
     # Use the true average until the exponential average is more correct
     alpha = min(1 - 1 / (global_step + 1), alpha)
@@ -42,7 +63,7 @@ def update_ema_variables(model, ema_model, alpha, global_step):
         ema_param.data.mul_(alpha).add_(1 - alpha, param.data)
 
 
-def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None, strong_mask=None):
+def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None, strong_mask=None, adjust_lr=False):
     """ One epoch of a Mean Teacher model
     :param train_loader: torch.utils.data.DataLoader, iterator of training batches for an epoch.
     Should return 3 values: teacher input, student input, labels
@@ -62,16 +83,14 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
 
     logger.debug("Nb batches: {}".format(len(train_loader)))
     start = time.time()
-    rampup_length = len(train_loader) * cfg.n_epoch // 2
+
+    rampup_value = ramps.exp_rampup(epoch, cfg.n_epoch_rampup)
     for i, ((batch_input, ema_batch_input), target) in enumerate(train_loader):
         global_step = epoch * len(train_loader) + i
-        if global_step < rampup_length:
-            rampup_value = ramps.sigmoid_rampup(global_step, rampup_length)
-        else:
-            rampup_value = 1.0
 
         # Todo check if this improves the performance
-        # adjust_learning_rate(optimizer, rampup_value, rampdown_value)
+        if adjust_lr:
+            adjust_learning_rate(optimizer, rampup_value, rampdown_value=0)
         meters.update('lr', optimizer.param_groups[0]['lr'])
 
         batch_input, ema_batch_input, target = to_cuda_if_available(batch_input, ema_batch_input, target)
@@ -301,13 +320,15 @@ if __name__ == '__main__':
     else:
         n_channel = 1
 
-    crnn_kwargs = {"n_in_channel": n_channel, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 64,
+    n_layers = 7
+    crnn_kwargs = {"n_in_channel": n_channel, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 128,
                    "n_layers_RNN": 2,
                    "activation": "glu",
                    "dropout": 0.5,
-                   "kernel_size": 3 * [3], "padding": 3 * [1], "stride": 3 * [1], "nb_filters": [64, 64, 64],
-                   "pooling": [(2, 4), (2, 4), (2, 4), (1, 2)]}
-    pooling_time_ratio = 8  # 2 * 2 * 2
+                   "kernel_size": n_layers * [3], "padding": n_layers * [1], "stride": n_layers * [1],
+                   "nb_filters": [16,  32,  64,  128,  128, 128, 128],
+                   "pooling": [[2, 2], [2, 2], [1, 2], [1, 2], [1, 2], [1, 2], [1, 2]]}
+    pooling_time_ratio = 4  # 2 * 2
 
     # ##############
     # DATA
@@ -408,7 +429,7 @@ if __name__ == '__main__':
     for param in crnn_ema.parameters():
         param.detach_()
 
-    optim_kwargs = {"lr": 0.001, "betas": (0.9, 0.999)}
+    optim_kwargs = {"lr": 0.0001, "betas": (0.9, 0.999)}
     optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, crnn.parameters()), **optim_kwargs)
     bce_loss = nn.BCELoss()
 
