@@ -16,7 +16,7 @@ SCRIPTS_PATH=../data_generation
 
 # If not already done
 echo "download real data audio files ... ~23GB"
-python ${SCRIPTS_PATH}/download_real.py --basedir=${DATASET_DIR}
+python ${SCRIPTS_PATH}/download_recorded_soundscapes.py --basedir=${DATASET_DIR}
 
 #############
 # DESED Soundbank
@@ -38,6 +38,7 @@ echo "Done"
 ############
 # Source separation
 #########
+cd ..
 wget -O FUSS_baseline_model.tar.gz https://zenodo.org/record/3694384/files/FUSS_baseline_model.tar.gz?download=1
 tar -xzf FUSS_baseline_model.tar.gz
 #rm FUSS_baseline_model.tar.gz
