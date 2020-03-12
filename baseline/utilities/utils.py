@@ -17,6 +17,7 @@ import os
 import os.path as osp
 import librosa
 import torch
+from desed.utils import create_folder
 from torch import nn
 from dcase_util.data import DecisionEncoder
 
@@ -411,6 +412,14 @@ def get_transforms(frames, scaler=None, add_axis_conv=True, augment_type=None):
 
 
 def generate_tsv_wav_durations(audio_dir, out_tsv):
+    """ Generate a dataframe with filename and duration of the file
+    Args:
+        audio_dir: str, the path of the folder where audio files are (used by glob.glob)
+        out_tsv: str, the path of the output tsv file
+
+    Returns:
+        pd.DataFrame, the dataframe containing filenames and durations
+    """
     meta_list = []
     for file in glob.glob(os.path.join(audio_dir, "*.wav")):
         d = soundfile.info(file).duration
@@ -424,31 +433,37 @@ def generate_tsv_wav_durations(audio_dir, out_tsv):
 def generate_tsv_from_isolated_events(wav_folder, out_tsv=None):
     """ Generate list of separated wav files in a folder and export them in a tsv file
     Separated audio files considered are all wav files in 'subdirectories' of the 'wav_folder'
-    :param wav_folder: str, path of the folder containing subdirectories (one for each mixture separated)
-    :param out_tsv: str, path of the csv in which to save the list of files
-    :return: pd.DataFrame, having only one columnd with the filename considered
+    Args:
+        wav_folder: str, path of the folder containing subdirectories (one for each mixture separated)
+        out_tsv: str, path of the csv in which to save the list of files
+    Returns:
+        pd.DataFrame, having only one column with the filename considered
     """
-    source_sep_df = pd.DataFrame()
-    list_dirs = [d for d in os.listdir(wav_folder) if osp.isdir(osp.join(wav_folder, d))]
-    for dirname in list_dirs:
-        list_isolated_files = []
-        for dir, subdir, fnames in os.walk(osp.join(wav_folder, dirname)):
-            for fname in fnames:
-                if osp.splitext(fname)[1] in [".wav"]:
-                    # Get the level folders and keep it in the tsv
-                    subfolder = dir.split(dirname + os.sep)[1:]
-                    if len(subfolder)> 0:
-                        subdirs = osp.join(*subfolder)
+    if out_tsv is not None and os.path.exists(out_tsv):
+        source_sep_df = pd.read_csv(out_tsv, sep="\t")
+    else:
+        source_sep_df = pd.DataFrame()
+        list_dirs = [d for d in os.listdir(wav_folder) if osp.isdir(osp.join(wav_folder, d))]
+        for dirname in list_dirs:
+            list_isolated_files = []
+            for dir, subdir, fnames in os.walk(osp.join(wav_folder, dirname)):
+                for fname in fnames:
+                    if osp.splitext(fname)[1] in [".wav"]:
+                        # Get the level folders and keep it in the tsv
+                        subfolder = dir.split(dirname + os.sep)[1:]
+                        if len(subfolder)> 0:
+                            subdirs = osp.join(*subfolder)
+                        else:
+                            subdirs = ""
+                        # Append the subfolders and name in the list of files
+                        list_isolated_files.append(osp.join(dirname, subdirs, fname))
                     else:
-                        subdirs = ""
-                    # Append the subfolders and name in the list of files
-                    list_isolated_files.append(osp.join(dirname, subdirs, fname))
-                else:
-                    warnings.warn(f"Not only wav audio files in the separated source folder,"
-                                  f"{fname} not added to the .tsv file")
-        source_sep_df = source_sep_df.append(pd.DataFrame(list_isolated_files, columns=["filename"]))
-    if out_tsv is not None:
-        source_sep_df.to_csv(out_tsv, sep="\t", index=False, float_format="%.3f")
+                        warnings.warn(f"Not only wav audio files in the separated source folder,"
+                                      f"{fname} not added to the .tsv file")
+            source_sep_df = source_sep_df.append(pd.DataFrame(list_isolated_files, columns=["filename"]))
+        if out_tsv is not None:
+            create_folder(os.path.dirname(out_tsv))
+            source_sep_df.to_csv(out_tsv, sep="\t", index=False, float_format="%.3f")
     return source_sep_df
 
 
