@@ -1,3 +1,5 @@
+import warnings
+
 import librosa
 import numpy as np
 import torch
@@ -142,9 +144,29 @@ class AugmentGaussianNoise(Transform):
                std: float, std of the Gaussian noise to add
            """
 
-    def __init__(self, mean=0, std=0.5):
+    def __init__(self, mean=0, std=None, snr=None):
         self.mean = mean
         self.std = std
+        self.snr = snr
+
+    @staticmethod
+    def gaussian_noise(features, snr):
+        """Apply gaussian noise on each point of the data
+
+                Args:
+                    features: numpy.array, features to be modified
+                Returns:
+                    numpy.ndarray
+                    Modified features
+                """
+        std = np.mean(features ** 2 * 10 ** (-snr / 10), axis=0)
+        try:
+            noise = np.random.normal(0, std, features.shape)
+        except Exception as e:
+            warnings.warn(f"the computed noise did not work std: {std}, using 0.5 for std instead")
+            noise = np.random.normal(0, 0.5, features.shape)
+
+        return features + noise
 
     def transform_data(self, data):
         """ Apply the transformation on data
@@ -153,10 +175,15 @@ class AugmentGaussianNoise(Transform):
 
             Returns:
                 (np.array, np.array)
-                (original data, noise applied to original data)
+                (original data, noisy_data (data + noise))
         """
-        noise = data + np.abs(np.random.normal(0, 0.5 ** 2, data.shape))
-        return data, noise
+        if self.std is not None:
+            noisy_data = data + np.abs(np.random.normal(0, 0.5 ** 2, data.shape))
+        elif self.snr is not None:
+            noisy_data = self.gaussian_noise(data, self.snr)
+        else:
+            raise NotImplementedError("Only (mean, std) or snr can be given")
+        return data, noisy_data
 
 
 class ToTensor(Transform):

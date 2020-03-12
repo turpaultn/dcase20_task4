@@ -49,12 +49,17 @@ batch_size = 24
 # Todo, reput as normal
 import torch
 if torch.cuda.is_available():
-    n_epoch = 100
+    n_epoch = 200
+    n_epoch_rampup = 50
 else:
     n_epoch = 1
+    n_epoch_rampup = 1
 
 checkpoint_epochs = 1
 save_best = True
+
+max_learning_rate = 0.001
+
 
 # Post processing
 median_window = 5

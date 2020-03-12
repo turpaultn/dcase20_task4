@@ -402,7 +402,7 @@ def get_transforms(frames, scaler=None, add_axis_conv=True, augment_type=None):
     # Todo, add other augmentations
     if augment_type is not None:
         if augment_type == "noise":
-            transf.append(AugmentGaussianNoise(mean=0., std=0.5))
+            transf.append(AugmentGaussianNoise(mean=0., snr=15))
 
     transf.extend([ApplyLog(), PadOrTrunc(nb_frames=frames), ToTensor(unsqueeze_axis=unsqueeze_axis)])
     if scaler is not None:
