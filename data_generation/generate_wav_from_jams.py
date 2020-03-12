@@ -54,16 +54,11 @@ if __name__ == '__main__':
         out_tsv = out_audio_dir.replace("audio", "metadata") + ".tsv"
 
     save_isolated = args.save_isolated
-    if save_isolated:
-        isolated_events_path = out_audio_dir
-    else:
-        isolated_events_path = None
 
     # ########
     # Generate
     # #######
     generate_files_from_jams(list_jams, out_audio_dir, out_folder_jams=out_folder_jams,
-                             fg_path=fg_path_train, bg_path=bg_path_train, save_isolated_events=save_isolated,
-                             isolated_events_path=isolated_events_path)
+                             fg_path=fg_path_train, bg_path=bg_path_train, save_isolated_events=save_isolated)
     if out_tsv:
         generate_tsv_from_jams(list_jams, out_tsv)
