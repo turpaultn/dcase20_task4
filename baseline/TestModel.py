@@ -49,17 +49,51 @@ def _load_scaler(state):
         scaler = Scaler()
     else:
         raise NotImplementedError("Not the right type of Scaler has been saved in state")
-    scaler.load_state_dict(state["scaler"])
+    scaler.load_state_dict(state["scaler"]["state_dict"])
     return scaler
 
 
-def _get_predictions(state, pred_df, save_preds_path=None, audio_source=None, nb_files=None):
+def _get_predictions(state, strong_dataloader_ind, save_preds_path=None):
+    pooling_time_ratio = state["pooling_time_ratio"]
+    many_hot_encoder = ManyHotEncoder.load_state_dict(state["many_hot_encoder"])
+    crnn = _load_crnn(state)
+
+    predictions = get_predictions(crnn, strong_dataloader_ind, many_hot_encoder.decode_strong, pooling_time_ratio,
+                                  save_predictions=save_preds_path)
+    return predictions
+
+
+def _get_predictions_ss(state, gtruth_df, save_preds_path=None, audio_source=None, nb_files=None):
     if save_preds_path is not None and os.path.exists(save_preds_path):
         warnings.warn(f"Predictions are not computing since {save_preds_path} already exists")
         predictions = pd.read_csv(save_preds_path, sep="\t")
     else:
-        if audio_source is None:
-            raise NameError(f"if {save_preds_path} is not already computed audio_source should be defined")
+        pred_df = gtruth_df.copy()
+        ### Define dataloader
+        many_hot_encoder = ManyHotEncoder.load_state_dict(state["many_hot_encoder"])
+        scaler = _load_scaler(state)
+        dataset = DESED(base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
+                        compute_log=False)
+        # Keep only the number we want to test on
+        if nb_files is not None:
+            pred_df = DESED.get_subpart_data(pred_df, nb_files)
+        pred_df = dataset.extract_features_from_df(pred_df, audio_source)
+        transforms_valid = get_transforms(cfg.max_frames, scaler=scaler)
+        strong_dataload = DataLoadDf(pred_df, dataset.get_feature_file, many_hot_encoder.encode_strong_df,
+                                     transform=transforms_valid, return_indexes=True)
+        strong_dataloader_ind = DataLoader(strong_dataload, batch_size=cfg.batch_size, drop_last=False)
+    return predictions
+
+
+def test_model(state, gtruth_df, save_preds_path=None, audio_source=None, nb_files=None):
+    if save_preds_path is not None and os.path.exists(save_preds_path):
+        warnings.warn(f"Predictions are not computing since {save_preds_path} already exists")
+        predictions = pd.read_csv(save_preds_path, sep="\t")
+    else:
+        pred_df = gtruth_df.copy()
+        ### Define dataloader
+        many_hot_encoder = ManyHotEncoder.load_state_dict(state["many_hot_encoder"])
+        scaler = _load_scaler(state)
         dataset = DESED(base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
                         compute_log=False)
         # Keep only the number we want to test on
@@ -67,23 +101,14 @@ def _get_predictions(state, pred_df, save_preds_path=None, audio_source=None, nb
             pred_df = DESED.get_subpart_data(pred_df, nb_files)
         pred_df = dataset.extract_features_from_df(pred_df, audio_source)
 
-        pooling_time_ratio = state["pooling_time_ratio"]
-        many_hot_encoder = ManyHotEncoder.load_state_dict(state["many_hot_encoder"])
-        scaler = _load_scaler(state)
-        crnn = _load_crnn(state)
 
         transforms_valid = get_transforms(cfg.max_frames, scaler=scaler)
         strong_dataload = DataLoadDf(pred_df, dataset.get_feature_file, many_hot_encoder.encode_strong_df,
                                      transform=transforms_valid, return_indexes=True)
         strong_dataloader_ind = DataLoader(strong_dataload, batch_size=cfg.batch_size, drop_last=False)
-        predictions = get_predictions(crnn, strong_dataloader_ind, many_hot_encoder.decode_strong, pooling_time_ratio,
-                                      save_predictions=save_preds_path)
-    return predictions
 
+        predictions = _get_predictions(state, strong_dataloader_ind, save_preds_path=save_preds_path)
 
-def test_model(state, gtruth_df, save_preds_path=None, audio_source=None, nb_files=None,):
-    predictions = _get_predictions(state, gtruth_df, save_preds_path=save_preds_path,
-                                   audio_source=audio_source, nb_files=nb_files)
     compute_sed_eval_metrics(predictions, gtruth_df)
 
     # weak_dataload = DataLoadDf(df, dataset.get_feature_file, many_hot_encoder.encode_weak,
@@ -118,62 +143,49 @@ def test_model_ss(state, gtruth_df, folder_sources=None, pattern_isolated_events
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="")
+    parser.add_argument("-m", '--model_path', type=str, required=True,
+                        help="Path of the ss_model to be evaluated")
+    parser.add_argument("-g", '--groundtruth_tsv', type=str, required=True,
+                        help="Path of the groundtruth tsv file")
     parser.add_argument("-n", '--nb_files', type=int, default=None,
                         help="Number of files to be used. Useful when testing on small number of files.")
-    parser.add_argument("-m", '--model_path', type=str,
-                        help="Path of the ss_model to be evaluated")
-    parser.add_argument("-s", '--save_predictions_path', type=str, default=None,
-                        help="Path for the predictions to be saved (if needed)")
-    parser.add_argument("-g", '--groundtruth_tsv', type=str,
-                        help="Path of the groundtruth tsv file")
     # Next groundtruth variable could be ommited if same organization than DESED dataset
     parser.add_argument('--meta_gt', type=str, default=None,
                         help="Path of the groundtruth description of filenames and durations")
     parser.add_argument("-t", '--groundtruth_audio_dir', type=str, default=None,
                         help="Path of the groundtruth filename, (see in config, at dataset folder)")
-
+    parser.add_argument("-s", '--save_predictions_path', type=str, default=None,
+                        help="Path for the predictions to be saved (if needed)")
+    # Source separation
     parser.add_argument("-a", '--base_dir_ss', type=str, default=None,
                         help="Base directory where to search subdirectories in which there are isolated events")
-    parser.add_argument("-z", '--save_predictions_path_ss', type=str, default=None,
-                        help="Path for the predictions of source separation to be saved, if not set, they are not saved")
-
     f_args = parser.parse_args()
 
     gt_fname, ext = os.path.splitext(f_args.groundtruth_tsv)
-    if f_args.meta_gt is None:
+
+    meta_gt = f_args.meta_gt
+    if meta_gt is None:
         meta_gt = gt_fname + "_meta" + ext
-    else:
-        meta_gt = f_args.meta_gt
 
-    if f_args.groundtruth_audio_dir is None:
+    gt_audio_dir = f_args.groundtruth_audio_dir
+    if gt_audio_dir is None:
         gt_audio_dir = gt_fname.replace("audio", "metadata")
-    else:
-        gt_audio_dir = f_args.groundtruth_audio_dir
-
-    model_path = f_args.model_path
-    expe_state = torch.load(model_path, map_location="cpu")
-
-    groundtruth_df = pd.read_csv(f_args.groundtruth_tsv, sep="\t")
-    logger.info("\n #### Original files ####")
-    pred_mixt = test_model(expe_state, groundtruth_df, save_preds_path=f_args.save_predictions_path,
-                           audio_source=gt_audio_dir,
-                           nb_files=f_args.nb_files)
 
     if not os.path.exists(meta_gt):
         meta_df = generate_tsv_wav_durations(gt_audio_dir, meta_gt)
     else:
         meta_df = pd.read_csv(meta_gt, sep='\t')
 
-    psds_results(
-        predictions=pred_mixt,
-        gtruth_df=groundtruth_df,
-        gtruth_durations=meta_df
-    )
-    # Todo remove the concatenation of ss and sed, since it will be merged in the model
-    if f_args.save_predictions_path_ss is not None:
+    groundtruth_df = pd.read_csv(f_args.groundtruth_tsv, sep="\t")
+
+    # Model
+    model_path = f_args.model_path
+    expe_state = torch.load(model_path, map_location="cpu")
+
+    if f_args.base_dir_ss is not None:
         logger.info("\n #### Separated sources ####")
         pred_ss = test_model_ss(expe_state, groundtruth_df, f_args.base_dir_ss, nb_files=f_args.nb_files,
-                                save_preds_path=f_args.save_predictions_path_ss)
+                                save_preds_path=f_args.save_predictions_path)
         psds_results(
             predictions=pred_ss,
             gtruth_df=groundtruth_df,
@@ -181,17 +193,14 @@ if __name__ == '__main__':
         )
         logger.info("\n #### Combination of original and separated sources ####")
 
-        pred_ss = pd.read_csv(f_args.save_predictions_path_ss, sep="\t")
-        predict_comb = pd.concat([pred_ss, pred_mixt]).reset_index(drop=True)
-        logger.debug(predict_comb.head())
-        logger.debug(predict_comb.tail())
-        predictions = post_process_df_labels(predict_comb, 10)
+    else:
+        logger.info("\n #### Original files ####")
+        pred_mixt = test_model(expe_state, groundtruth_df, save_preds_path=f_args.save_predictions_path,
+                               audio_source=gt_audio_dir,
+                               nb_files=f_args.nb_files)
 
-        # # Event based
-        event_metric = compute_sed_eval_metrics(predictions, groundtruth_df)
-        # Load metadata and ground truth tables
         psds_results(
-            predictions=predictions,
+            predictions=pred_mixt,
             gtruth_df=groundtruth_df,
             gtruth_durations=meta_df
         )

@@ -17,54 +17,49 @@ eval_desed = os.path.join(workspace, "dataset/metadata/eval/public.tsv")
 audio_validation_dir = os.path.join(workspace, 'dataset/audio/validation')
 
 ## Separated data
-weak_ss = os.path.join(workspace, 'dataset/audio/train/weak_ss/ss_computed')
-unlabel_ss = os.path.join(workspace, 'dataset/audio/train/unlabel_in_domain_ss/ss_computed')
-synthetic_ss = os.path.join(workspace, 'dataset/audio/train/synthetic20_reverb/ss_computed')
-validation_ss = os.path.join(workspace, 'dataset/audio/validation_ss/ss_computed')
-# test2018_ss = os.path.join(workspace, 'dataset/audio/validation/test_dcase2018_ss/ss_computed')
-# eval2018_ss = os.path.join(workspace, 'dataset/audio/validation/eval_dcase2018_ss/ss_computed')
-eval_desed_ss = os.path.join(workspace, "dataset/audio/eval/public_ss/ss_computed")
+weak_ss = os.path.join(workspace, 'dataset/audio/train/weak_ss/separated_sources')
+unlabel_ss = os.path.join(workspace, 'dataset/audio/train/unlabel_in_domain_ss/separated_sources')
+synthetic_ss = os.path.join(workspace, 'dataset/audio/train/synthetic20_reverb/separated_sources')
+validation_ss = os.path.join(workspace, 'dataset/audio/validation_ss/separated_sources')
+eval_desed_ss = os.path.join(workspace, "dataset/audio/eval/public_ss/separated_sources")
 
+scaler_type = "dataset"
+scale_peraudio_on = "global"
+scale_peraudio_type = "min-max"
 
-normalization_on = "per_band"
-normalization_type = "min-max"
-
+# Data preparation
 ref_db = -55
-# config
-# prepare_data
 sample_rate = 16000
-n_window = 2048
-hop_length = 511
-n_mels = 64
 max_len_seconds = 10.
+# features
+n_window = 2048
+hop_length = 256
+n_mels = 128
 max_frames = math.ceil(max_len_seconds * sample_rate / hop_length)
 
 f_min = 0.
 f_max = 8000.
 
-lr = 0.0001
-initial_lr = 0.
-beta1_before_rampdown = 0.9
-beta1_after_rampdown = 0.5
-beta2_during_rampdup = 0.99
-beta2_after_rampup = 0.999
-weight_decay_during_rampup = 0.99
-weight_decay_after_rampup = 0.999
-
+# Model
 max_consistency_cost = 2
-max_learning_rate = 0.001
 
-median_window = 5
-
-# Main
+# Training
 num_workers = 12
 batch_size = 24
-n_epoch = 100
+# Todo, reput as normal
+import torch
+if torch.cuda.is_available():
+    n_epoch = 100
+else:
+    n_epoch = 1
 
 checkpoint_epochs = 1
-
 save_best = True
 
+# Post processing
+median_window = 5
+
+# Classes
 file_path = os.path.abspath(os.path.dirname(__file__))
 classes = pd.read_csv(os.path.join(file_path, validation), sep="\t").event_label.dropna().sort_values().unique()
 

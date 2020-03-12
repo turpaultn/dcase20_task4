@@ -5,7 +5,9 @@
 # This software is distributed under the terms of the License MIT
 #########################################################################
 import bisect
+import glob
 import itertools
+import os
 
 import numpy as np
 import pandas as pd
@@ -44,15 +46,17 @@ class DataLoadDf(Dataset):
         transform : function(), function to be applied to the sample (pytorch transformations)
         return_indexes: bool, whether or not to return indexes when use __getitem__
     """
-    def __init__(self, df, get_feature_file_func, encode_function, transform=None,
-                 return_indexes=False):
+    def __init__(self, df, encode_function, transform=None,
+                 return_indexes=False, in_memory=False):
 
         self.df = df
-        self.get_feature_file_func = get_feature_file_func
         self.encode_function = encode_function
         self.transform = transform
         self.return_indexes = return_indexes
         self.filenames = df.filename.drop_duplicates()
+        self.in_memory = in_memory
+        if self.in_memory:
+            self.features = {}
 
     def set_return_indexes(self, val):
         """ Set the value of self.return_indexes
@@ -61,6 +65,25 @@ class DataLoadDf(Dataset):
             val : bool, whether or not to return indexes when use __getitem__
         """
         self.return_indexes = val
+
+    def get_feature_file_func(self, filename):
+        """Get a feature file from a filename
+        Args:
+            filename:  str, name of the file to get the feature
+
+        Returns:
+            numpy.array
+            containing the features computed previously
+        """
+        if not self.in_memory:
+            data = np.load(filename).astype(np.float32)
+        else:
+            if self.features.get(filename) is None:
+                data = np.load(filename).astype(np.float32)
+                self.features[filename] = data
+            else:
+                data = self.features[filename]
+        return data
 
     def __len__(self):
         """
@@ -151,7 +174,32 @@ class DataLoadDf(Dataset):
         if type(self.transform) is not Compose:
             raise TypeError("To add transform, the transform should already be a compose of transforms")
         transforms = self.transform.add_transform(transform)
-        return DataLoadDf(self.df, self.get_feature_file_func, self.encode_function, transforms, self.return_indexes)
+        return DataLoadDf(self.df, self.encode_function, transforms, self.return_indexes, self.in_memory)
+
+
+class DataLoadDfSS(DataLoadDf):
+    def __init__(self, df, encode_function, transform=None, return_indexes=False, in_memory=False,
+                 ss_pattern="_events"):
+        super(DataLoadDfSS, self).__init__(df, encode_function, transform, return_indexes, in_memory)
+        self.ss_pattern = ss_pattern
+
+    def get_feature_file_func(self, filename):
+        if not self.in_memory or self.features.get(filename) is None:
+            # Get the mixture
+            arr_loaded_data = np.expand_dims(np.load(filename), 0)
+            # Get filenames of separated sources
+            path_to_search = os.path.join(os.path.splitext(filename)[0] + self.ss_pattern, "*.npy")
+            filenames_to_load = glob.glob(path_to_search)
+            if len(filenames_to_load) == 0:
+                warnings.warn(f"Unexpected empty list for filenames_to_load, check {path_to_search}")
+            for fname in filenames_to_load:
+                arr_loaded_data = np.concatenate((arr_loaded_data, np.expand_dims(np.load(fname), 0)))
+            if self.in_memory:
+                self.features[filename] = arr_loaded_data
+        else:
+            arr_loaded_data = self.features[filename]
+
+        return arr_loaded_data
 
 
 class Compose(object):
@@ -255,7 +303,7 @@ class Subset(DataLoadDf):
         self.indices = indices
         self.df = dataload_df.df.loc[indices].reset_index(inplace=False, drop=True)
 
-        super(Subset, self).__init__(self.df, dataload_df.get_feature_file_func, dataload_df.encode_function,
+        super(Subset, self).__init__(self.df, dataload_df.encode_function,
                                      dataload_df.transform, dataload_df.return_indexes)
 
     def __getitem__(self, idx):
