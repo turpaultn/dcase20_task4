@@ -7,6 +7,7 @@
 
 import argparse
 import functools
+import glob
 import inspect
 import os
 import time
@@ -22,15 +23,16 @@ from torch.utils.data import DataLoader
 from torch import nn
 
 from Desed import DESED
-from DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler
+from DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler, DataLoadDfSS
 from evaluation_measures import get_f_measure_by_class, get_predictions, compute_sed_eval_metrics, psds_results
 from models.CRNN import CRNN
 import config as cfg
 from utilities import ramps
 from utilities.Logger import create_logger
-from utilities.Scaler import ScalerPerAudio
+from utilities.Scaler import ScalerPerAudio, Scaler
 from utilities.utils import ManyHotEncoder, SaveBest, to_cuda_if_available, weights_init, \
-    get_transforms, AverageMeterSet, generate_tsv_wav_durations, meta_path_to_audio_dir, audio_dir_to_meta_path
+    get_transforms, AverageMeterSet, generate_tsv_wav_durations, meta_path_to_audio_dir, audio_dir_to_meta_path, \
+    generate_tsv_from_isolated_events
 
 
 def update_ema_variables(model, ema_model, alpha, global_step):
@@ -154,21 +156,35 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
         'Time {:.2f}\t'
         '{meters}'.format(
             epoch, epoch_time, meters=meters))
+    return loss
 
 
-def get_feature_file_ss(filename, ss_df, feature_dir, ss_pattern="_events"):
-    fnames_no_pattern = ss_df.filename.apply(lambda x: x.split(ss_pattern)[0])
-    fname_to_match = os.path.splitext(filename)[0]
+# def get_feature_file_ss(filename, ss_df, feature_dir, ss_pattern="_events"):
+#     # fnames_no_pattern = ss_df.filename.apply(lambda x: x.split(ss_pattern)[0])
+#     # fname_to_match = os.path.splitext(filename)[0]
+#     #
+#     filenames_to_load = [filename]
+#     filenames_to_load.extend(glob.glob(os.path.join(os.path.splitext(filename)[0] + ss_pattern, "*.wav")))
+#     print(filenames_to_load)
+#     # filenames_to_load.extend(ss_df.filename[fnames_no_pattern == fname_to_match].tolist())
+#     loaded_data = []
+#     for fname in filenames_to_load:
+#         fname = os.path.join(feature_dir, os.path.splitext(fname)[0] + ".npy")
+#         data = np.load(fname)
+#         loaded_data.append(data)
+#     arr_loaded_data = np.array(loaded_data)
+#     return arr_loaded_data
 
-    filenames_to_load = [filename]
-    filenames_to_load.extend(ss_df.filename[fnames_no_pattern == fname_to_match].tolist())
-    loaded_data = []
-    for fname in filenames_to_load:
-        fname = os.path.join(feature_dir, os.path.splitext(fname)[0] + ".npy")
-        data = np.load(fname)
-        loaded_data.append(data)
-    arr_loaded_data = np.array(loaded_data)
-    return arr_loaded_data
+
+# def get_feature_file_ss(filename, feature_dir, ss_pattern="_events"):
+#     fname = os.path.join(feature_dir, os.path.splitext(filename)[0] + ".npy")
+#     arr_loaded_data = np.expand_dims(np.load(fname), 0)
+#
+#     filenames_to_load = glob.glob(os.path.join(feature_dir, os.path.splitext(filename)[0] + ss_pattern, "*.npy"))
+#     print(filenames_to_load)
+#     for fname in filenames_to_load:
+#         arr_loaded_data = np.concatenate((arr_loaded_data, np.expand_dims(np.load(fname), 0)))
+#     return arr_loaded_data
 
 
 def get_dfs(desed_dataset, reduced_nb_data):
@@ -198,8 +214,9 @@ def get_dfs(desed_dataset, reduced_nb_data):
     logger.debug(valid_synth_df.event_label.value_counts())
 
     # Eval 2018 to report results
-    eval_2018_df = dataset.initialize_and_get_df(cfg.eval2018, audio_dir=cfg.audio_validation_dir,
-                                                 nb_files=reduced_number_of_data)
+    eval2018 = pd.read_csv(cfg.eval2018, sep="\t")
+    eval_2018_df = validation_df[validation_df.raw_filename.isin(eval2018.filename)]
+    logger.info(f"eval2018 len: {len(eval_2018_df)}")
 
     data_dfs = {"weak": weak_df,
                 "train_weak": train_weak_df,
@@ -221,69 +238,27 @@ def get_dfs(desed_dataset, reduced_nb_data):
 # Create a Transform "ConcatMixturesSeparated" that replaces the unsqueeze_axis of ToTensor
 # (how do we do for the folder ??, do we do a match ?)
 # Adapt the CNN to take more than 1 channel at the beginning
-def create_tsv_from_ss_folder(ss_folder, out_tsv=None):
-    logger = create_logger(__name__ + "/" + inspect.currentframe().f_code.co_name, terminal_level=cfg.terminal_level)
-    not_only_dir = False
-    if out_tsv is None:
-        out_tsv = audio_dir_to_meta_path(ss_folder)
-    create_folder(os.path.dirname(out_tsv))
-
-    if not os.path.exists(out_tsv):
-        logger.info(f"generating: {out_tsv}, from {ss_folder}")
-        list_events = []
-        list_dirs = os.listdir(ss_folder)
-        for ss_dir in list_dirs:
-            dir_path = os.path.join(ss_folder, ss_dir)
-            if os.path.isdir(dir_path):
-                files_to_add = [os.path.join(ss_dir, fname) for fname in os.listdir(dir_path)]
-                if len(files_to_add) == 0:
-                    warnings.warn(f"Empty separated source folder {dir_path}")
-                list_events.extend(files_to_add)
-            else:
-                not_only_dir = True
-        if not_only_dir:
-            warnings.warn(f"Be careful, not only directories of separated events in the folder specified: {ss_folder}")
-        df_events = pd.DataFrame(list_events, columns=["filename"])
-        df_events.to_csv(out_tsv, sep="\t", index=False)
-    return out_tsv
 
 
-def get_dfs_ss(desed_dataset, reduced_nb_data, pattern_ss="_events"):
-    pattern_ss = "_events"
-    weak_tsv = create_tsv_from_ss_folder(cfg.weak_ss)
-    unlabel_tsv = create_tsv_from_ss_folder(cfg.unlabel_ss)
-    synthetic_tsv = create_tsv_from_ss_folder(cfg.synthetic_ss)
-    validation_tsv = create_tsv_from_ss_folder(cfg.validation_ss)
+def extract_features_ss(desed_dataset, reduced_nb_data, pattern_ss="_events"):
+    data_dfs = {}
 
-    eval2018_tsv = os.path.join(os.path.dirname(validation_tsv), "eval2018.tsv")
-    if not os.path.exists(eval2018_tsv):
-        eval2018_no_ss = pd.read_csv(cfg.eval2018, sep="\t")
-        validation_df = pd.read_csv(validation_tsv, sep="\t")
-        eval2018_ss = validation_df[
-            validation_df.filename.apply(lambda x: (x.split(pattern_ss)[0] + ".wav")).isin(eval2018_no_ss.filename)
-        ]
-        eval2018_ss.to_csv(eval2018_tsv, sep="\t", index=False)
+    dict_paths = {
+        "weak": cfg.weak_ss,
+        "unlabel": cfg.unlabel_ss,
+        "synthetic": cfg.synthetic_ss,
+        "validation": cfg.validation_ss}
+    for subset in dict_paths:
+        tsv_path = audio_dir_to_meta_path(dict_paths[subset])
+        df = desed_dataset.initialize_ss(dict_paths[subset], tsv_path, reduced_nb_data, pattern_ss)
+        data_dfs[subset] = df
+        # Eval 2018 case
+        if subset == "validation":
+            eval2018_no_ss = pd.read_csv(cfg.eval2018, sep="\t")
+            eval2018 = df[df.raw_filename.apply(
+                lambda x: (x.split(pattern_ss)[0] + ".wav")).isin(eval2018_no_ss.filename)]
+            data_dfs["eval2018"] = eval2018
 
-    # Extract features, audio_dir="" since we put the full path in the dataframe
-    weak_df = desed_dataset.initialize_and_get_df(weak_tsv,
-                                                  nb_files=reduced_nb_data, download=False, pattern_ss=pattern_ss)
-    unlabel_df = desed_dataset.initialize_and_get_df(unlabel_tsv,
-                                                     nb_files=reduced_nb_data, download=False, pattern_ss=pattern_ss)
-    # Event if synthetic not used for training, used on validation purpose
-    synthetic_df = desed_dataset.initialize_and_get_df(synthetic_tsv,
-                                                       nb_files=reduced_nb_data, download=False, pattern_ss=pattern_ss)
-    validation = desed_dataset.initialize_and_get_df(validation_tsv,
-                                                     nb_files=reduced_nb_data, download=False, pattern_ss=pattern_ss)
-    eval2018 = desed_dataset.initialize_and_get_df(eval2018_tsv, audio_dir=meta_path_to_audio_dir(validation_tsv),
-                                                   nb_files=reduced_nb_data, download=False, pattern_ss=pattern_ss)
-
-    data_dfs = {
-        "weak": weak_df,
-        "unlabel": unlabel_df,
-        "synthetic": synthetic_df,
-        "validation": validation,
-        "eval2018": eval2018
-    }
     return data_dfs
 
 
@@ -331,7 +306,7 @@ if __name__ == '__main__':
                    "activation": "glu",
                    "dropout": 0.5,
                    "kernel_size": 3 * [3], "padding": 3 * [1], "stride": 3 * [1], "nb_filters": [64, 64, 64],
-                   "pooling": list(3 * ((2, 4),))}
+                   "pooling": [(2, 4), (2, 4), (2, 4), (1, 2)]}
     pooling_time_ratio = 8  # 2 * 2 * 2
 
     # ##############
@@ -341,26 +316,7 @@ if __name__ == '__main__':
                     compute_log=False)
 
     if use_separated_sources:
-        dfs_ss = get_dfs_ss(dataset, reduced_number_of_data)
-        add_axis_conv = False
-        get_feature_file_weak = functools.partial(get_feature_file_ss, ss_df=dfs_ss["weak"],
-                                                  feature_dir=dataset.feature_dir)
-        get_feature_file_unlabel = functools.partial(get_feature_file_ss, ss_df=dfs_ss["unlabel"],
-                                                     feature_dir=dataset.feature_dir)
-        get_feature_file_synth = functools.partial(get_feature_file_ss, ss_df=dfs_ss["synthetic"],
-                                                   feature_dir=dataset.feature_dir)
-        get_feature_file_validation = functools.partial(get_feature_file_ss, ss_df=dfs_ss["validation"],
-                                                        feature_dir=dataset.feature_dir)
-        get_feature_file_eval2018 = functools.partial(get_feature_file_ss, ss_df=dfs_ss["eval2018"],
-                                                        feature_dir=dataset.feature_dir)
-
-    else:
-        add_axis_conv = True
-        get_feature_file_weak = dataset.get_feature_file
-        get_feature_file_unlabel = dataset.get_feature_file
-        get_feature_file_synth = dataset.get_feature_file
-        get_feature_file_validation = dataset.get_feature_file
-        get_feature_file_eval2018 = dataset.get_feature_file
+        dfs_ss = extract_features_ss(dataset, reduced_number_of_data)
 
     dfs = get_dfs(dataset, reduced_number_of_data)
 
@@ -375,20 +331,49 @@ if __name__ == '__main__':
     classes = cfg.classes
     many_hot_encoder = ManyHotEncoder(classes, n_frames=cfg.max_frames // pooling_time_ratio)
 
-    scaler_args = [cfg.normalization_on, cfg.normalization_type]
-    scaler = ScalerPerAudio(*scaler_args)
-    transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv=add_axis_conv, augment_type="noise")
-
-    train_weak_data = DataLoadDf(dfs["train_weak"],
-                                 get_feature_file_weak, many_hot_encoder.encode_strong_df,
-                                 transform=transforms)
-    unlabel_data = DataLoadDf(dfs["unlabel"],
-                              get_feature_file_unlabel, many_hot_encoder.encode_strong_df,
-                              transform=transforms)
-
-    train_synth_data = DataLoadDf(dfs["train_synthetic"],
-                                  get_feature_file_synth, many_hot_encoder.encode_strong_df,
+    if cfg.scaler_type == "dataset":
+        transforms = get_transforms(cfg.max_frames)
+        train_weak_data = DataLoadDf(dfs["train_weak"], many_hot_encoder.encode_strong_df,
+                                     transform=transforms)
+        unlabel_data = DataLoadDf(dfs["unlabel"],
+                                  many_hot_encoder.encode_strong_df,
                                   transform=transforms)
+        train_synth_data = DataLoadDf(dfs["train_synthetic"],
+                                      many_hot_encoder.encode_strong_df,
+                                      transform=transforms)
+        scaler_args = []
+        scaler = Scaler()
+        # # Only on real data since that's our final goal and test data are real
+        scaler.calculate_scaler(ConcatDataset([train_weak_data, unlabel_data, train_synth_data]))
+    else:
+        scaler_args = [cfg.scale_peraudio_on, cfg.scale_peraudio_type]
+        scaler = ScalerPerAudio(*scaler_args)
+
+    if not use_separated_sources:
+        add_axis_conv = True
+    else:
+        add_axis_conv = False
+
+    transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv=add_axis_conv, augment_type="noise")
+    transforms_valid = get_transforms(cfg.max_frames, scaler=scaler, add_axis_conv=add_axis_conv)
+
+    if not use_separated_sources:
+        train_weak_data = DataLoadDf(dfs["train_weak"], many_hot_encoder.encode_strong_df, transform=transforms)
+        unlabel_data = DataLoadDf(dfs["unlabel"], many_hot_encoder.encode_strong_df, transform=transforms)
+
+        train_synth_data = DataLoadDf(dfs["train_synthetic"], many_hot_encoder.encode_strong_df, transform=transforms)
+
+        valid_synth_data = DataLoadDf(dfs["valid_synthetic"], many_hot_encoder.encode_strong_df,
+                                      transform=transforms_valid, return_indexes=True)
+        valid_weak_data = DataLoadDf(dfs["valid_weak"], many_hot_encoder.encode_weak, transform=transforms_valid)
+    else:
+        train_weak_data = DataLoadDfSS(dfs["train_weak"], many_hot_encoder.encode_strong_df, transform=transforms)
+        unlabel_data = DataLoadDfSS(dfs["unlabel"], many_hot_encoder.encode_strong_df, transform=transforms)
+
+        train_synth_data = DataLoadDfSS(dfs["train_synthetic"], many_hot_encoder.encode_strong_df, transform=transforms)
+        valid_synth_data = DataLoadDfSS(dfs["valid_synthetic"], many_hot_encoder.encode_strong_df,
+                                        transform=transforms_valid, return_indexes=True)
+        valid_weak_data = DataLoadDfSS(dfs["valid_weak"], many_hot_encoder.encode_weak, transform=transforms_valid)
 
     if not no_synthetic:
         list_dataset = [train_weak_data, unlabel_data, train_synth_data]
@@ -406,15 +391,7 @@ if __name__ == '__main__':
                                       batch_sizes=batch_sizes)
 
     training_data = DataLoader(concat_dataset, batch_sampler=sampler)
-
-    transforms_valid = get_transforms(cfg.max_frames, scaler=scaler, add_axis_conv=add_axis_conv)
-    valid_synth_data = DataLoadDf(dfs["valid_synthetic"],
-                                  get_feature_file_synth, many_hot_encoder.encode_strong_df,
-                                  transform=transforms_valid, return_indexes=True)
     valid_synth_dataloader = DataLoader(valid_synth_data, batch_size=cfg.batch_size)
-    valid_weak_data = DataLoadDf(dfs["valid_weak"],
-                                 get_feature_file_weak, many_hot_encoder.encode_weak,
-                                 transform=transforms_valid)
 
     # ##############
     # Model
@@ -450,7 +427,7 @@ if __name__ == '__main__':
                       'state_dict': optimizer.state_dict()},
         "pooling_time_ratio": pooling_time_ratio,
         "scaler": {
-            "type": "ScalerPerAudio",
+            "type": type(scaler).__name__,
             "args": scaler_args,
             "state_dict": scaler.state_dict()},
         "many_hot_encoder": many_hot_encoder.state_dict()
@@ -461,13 +438,15 @@ if __name__ == '__main__':
     # ##############
     # Train
     # ##############
+    results = {"loss": [], "valid_synth_f1": [], "weak_metric": [], "global_valid": []}
     for epoch in range(cfg.n_epoch):
         crnn = crnn.train()
         crnn_ema = crnn_ema.train()
 
         crnn, crnn_ema = to_cuda_if_available(crnn, crnn_ema)
 
-        train(training_data, crnn, optimizer, epoch, ema_model=crnn_ema, weak_mask=weak_mask, strong_mask=strong_mask)
+        loss = train(training_data, crnn, optimizer, epoch,
+                     ema_model=crnn_ema, weak_mask=weak_mask, strong_mask=strong_mask)
 
         crnn = crnn.eval()
         logger.info("\n ### Valid synthetic metric ### \n")
@@ -476,7 +455,10 @@ if __name__ == '__main__':
         # Validation with synthetic data
         valid_synth = dfs["valid_synthetic"]
         valid_events_metric = compute_sed_eval_metrics(predictions, valid_synth)
-        psds_results(predictions, valid_synth, durations_synth)
+        try:
+            psds_results(predictions, valid_synth, durations_synth)
+        except Exception as e:
+            logger.error("psds did not work ....")
 
         logger.info("\n ### Valid weak metric ### \n")
         weak_metric = get_f_measure_by_class(crnn, len(classes),
@@ -504,13 +486,19 @@ if __name__ == '__main__':
                 model_fname = os.path.join(saved_model_dir, "baseline_best")
                 torch.save(state, model_fname)
 
+            results["global_valid"].append(global_valid)
+        results["loss"].append(loss.item())
+        results["valid_synth_f1"].append(valid_events_metric.results_class_wise_average_metrics()["f_measure"]["f_measure"])
+        results["weak_metric"].append(weak_metric.mean())
+
     if cfg.save_best:
         model_fname = os.path.join(saved_model_dir, "baseline_best")
         state = torch.load(model_fname)
-        logger.info("testing model: {}".format(model_fname))
+        logger.info(f"testing model: {model_fname}, epoch: {state['epoch']}")
     else:
         logger.info("testing model of last epoch: {}".format(cfg.n_epoch))
-
+    results_df = pd.DataFrame(results).to_csv(os.path.join(saved_pred_dir, "results.tsv"),
+                                              sep="\t", index=False, float_format="%.4f")
     # ##############
     # Validation
     # ##############
@@ -518,17 +506,24 @@ if __name__ == '__main__':
     predicitons_fname = os.path.join(saved_pred_dir, "baseline_validation.tsv")
     predicitons_fname18 = os.path.join(saved_pred_dir, "baseline_eval18.tsv")
 
-    validation_data = DataLoadDf(dfs["validation"], get_feature_file_validation, many_hot_encoder.encode_strong_df,
+    if not use_separated_sources:
+        validation_data = DataLoadDf(dfs["validation"], many_hot_encoder.encode_strong_df,
+                                     transform=transforms_valid, return_indexes=True)
+        eval18_data = DataLoadDf(dfs["eval2018"], many_hot_encoder.encode_strong_df,
                                  transform=transforms_valid, return_indexes=True)
+    else:
+        validation_data = DataLoadDfSS(dfs["validation"], many_hot_encoder.encode_strong_df,
+                                       transform=transforms_valid, return_indexes=True)
+        eval18_data = DataLoadDfSS(dfs["eval2018"], many_hot_encoder.encode_strong_df,
+                                   transform=transforms_valid, return_indexes=True)
+
     validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
     valid_predictions = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
                                         pooling_time_ratio, save_predictions=predicitons_fname)
     compute_sed_eval_metrics(valid_predictions, dfs["validation"])
 
     # Eval 2018
-    eval18_data = DataLoadDf(dfs["eval2018"], get_feature_file_eval2018, many_hot_encoder.encode_strong_df,
-                             transform=transforms_valid, return_indexes=True)
     eval18_dataloader = DataLoader(eval18_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
     eval18_predictions = get_predictions(crnn, eval18_dataloader, many_hot_encoder.decode_strong,
-                                         pooling_time_ratio, save_predictions=predicitons_fname)
+                                         pooling_time_ratio, save_predictions=predicitons_fname18)
     compute_sed_eval_metrics(eval18_predictions, dfs["eval2018"])

@@ -8,6 +8,7 @@
 from __future__ import print_function
 import numpy as np
 import os
+import os.path as osp
 import librosa
 import time
 import pandas as pd
@@ -15,7 +16,7 @@ import pandas as pd
 import config as cfg
 from desed.download_real import download
 from utilities.Logger import create_logger
-from utilities.utils import read_audio, meta_path_to_audio_dir
+from utilities.utils import read_audio, meta_path_to_audio_dir, generate_tsv_from_isolated_events
 
 logger = create_logger(__name__)
 
@@ -61,14 +62,12 @@ class DESED:
                     - bbb.wav
 
     Args:
-        local_path: str, optional, base directory where the dataset is, to be changed if dataset moves
         base_feature_dir: str, optional, base directory to store the features
         recompute_features: bool, optional, wether or not to recompute features
-        save_log_feature: bool, optional, whether or not saving the logarithm of the feature or not
+        compute_log: bool, optional, whether or not saving the logarithm of the feature or not
             (particularly useful to put False to apply some data augmentation)
 
     Attributes:
-        local_path: str, base directory where the dataset is, to be changed if dataset moves
         base_feature_dir: str, base directory to store the features
         recompute_features: bool, wether or not to recompute features
         compute_log: bool, whether or not saving the logarithm of the feature or not
@@ -76,22 +75,23 @@ class DESED:
         feature_dir : str, directory to store the features
 
     """
-    def __init__(self, base_feature_dir="features",
-                 recompute_features=False, compute_log=True):
+    def __init__(self, base_feature_dir="features", recompute_features=False, compute_log=True):
 
         self.recompute_features = recompute_features
         self.compute_log = compute_log
 
-        feature_dir = os.path.join(base_feature_dir, "sr" + str(cfg.sample_rate) + "_win" + str(cfg.n_window)
+        feature_dir = osp.join(base_feature_dir, "sr" + str(cfg.sample_rate) + "_win" + str(cfg.n_window)
                                    + "_hop" + str(cfg.hop_length) + "_mels" + str(cfg.n_mels))
         if not self.compute_log:
             feature_dir += "_nolog"
 
-        self.feature_dir = os.path.join(feature_dir, "features")
+        self.feature_dir = osp.join(feature_dir, "features")
+        self.meta_feat_dir = osp.join(feature_dir, "metadata")
         # create folder if not exist
         os.makedirs(self.feature_dir, exist_ok=True)
+        os.makedirs(self.meta_feat_dir, exist_ok=True)
 
-    def initialize_and_get_df(self, tsv_path, audio_dir=None, nb_files=None, download=True, pattern_ss=None):
+    def initialize_and_get_df(self, tsv_path, audio_dir=None, nb_files=None, download=True):
         """ Initialize the dataset, extract the features dataframes
         Args:
             tsv_path: str, tsv path in the initial dataset
@@ -103,7 +103,7 @@ class DESED:
             pd.DataFrame
             The dataframe containing the right features and labels
         """
-        df_meta = self.get_df_from_meta(tsv_path, nb_files, pattern_ss=pattern_ss)
+        df_meta = self.get_df_from_meta(tsv_path, nb_files)
         logger.info("{} Total file number: {}".format(tsv_path, len(df_meta.filename.unique())))
         if audio_dir is None:
             audio_dir = meta_path_to_audio_dir(tsv_path)
@@ -113,7 +113,17 @@ class DESED:
             if nb_files is not None:
                 filenames = filenames.sample(nb_files)
             self.download(filenames, audio_dir)
-        return self.extract_features_from_df(df_meta, audio_dir)
+        df_features = self.extract_features_from_df(df_meta, audio_dir)
+        df_features.to_csv(osp.join(self.meta_feat_dir, osp.basename(tsv_path)), sep="\t", index=False)
+        return df_features
+
+    def initialize_ss(self, audio_dir, tsv_path, nb_files=None, pattern_ss="_events"):
+        df = generate_tsv_from_isolated_events(audio_dir, tsv_path)
+        df = self.get_subpart_data(df, nb_files, pattern_ss)
+        df_features = self.extract_features_from_df(df, audio_dir)
+        # Dirname because we assume that's the changing part
+        df_features.to_csv(osp.join(self.meta_feat_dir, osp.basename(osp.dirname(tsv_path))), sep="\t", index=False)
+        return df_features
 
     def get_feature_file(self, filename):
         """
@@ -125,7 +135,7 @@ class DESED:
             numpy.array
             containing the features computed previously
         """
-        fname = os.path.join(self.feature_dir, os.path.splitext(filename)[0] + ".npy")
+        fname = osp.join(self.feature_dir, osp.splitext(filename)[0] + ".npy")
         data = np.load(fname)
         return data
 
@@ -173,17 +183,17 @@ class DESED:
             audio_dir: str, the path where to find the wav files specified by the dataframe
         """
         t1 = time.time()
-
+        df_features = pd.DataFrame()
         for ind, wav_name in enumerate(df_meta.filename.unique()):
             if ind % 500 == 0:
                 logger.debug(ind)
-            wav_path = os.path.join(audio_dir, wav_name)
+            wav_path = osp.join(audio_dir, wav_name)
 
-            out_filename = os.path.splitext(wav_name)[0] + ".npy"
-            out_path = os.path.join(self.feature_dir, out_filename)
+            out_filename = osp.splitext(wav_name)[0] + ".npy"
+            out_path = osp.join(self.feature_dir, out_filename)
 
-            if not os.path.exists(out_path):
-                if not os.path.isfile(wav_path):
+            if not osp.exists(out_path):
+                if not osp.isfile(wav_path):
                     logger.error("File %s is in the tsv file but the feature is not extracted because "
                                  "file do not exist!" % wav_path)
                     df_meta = df_meta.drop(df_meta[df_meta.filename == wav_name].index)
@@ -193,12 +203,16 @@ class DESED:
                         print("File %s is corrupted!" % wav_path)
                     else:
                         mel_spec = self.calculate_mel_spec(audio)
-                        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                        os.makedirs(osp.dirname(out_path), exist_ok=True)
                         np.save(out_path, mel_spec)
 
                     logger.debug("compute features time: %s" % (time.time() - t1))
+            row_features = df_meta[df_meta.filename == wav_name]
+            row_features.loc[:, "raw_filename"] = row_features["filename"]
+            row_features.loc[:, "filename"] = out_path
+            df_features = df_features.append(row_features, ignore_index=True)
 
-        return df_meta.reset_index(drop=True)
+        return df_features.reset_index(drop=True)
 
     @staticmethod
     def get_classes(list_dfs):
