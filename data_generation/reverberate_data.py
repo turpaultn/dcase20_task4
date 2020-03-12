@@ -2,8 +2,6 @@
 import argparse
 import glob
 import multiprocessing
-import os
-
 import numpy as np
 import os.path as osp
 import logging
@@ -17,7 +15,8 @@ from desed.utils import create_folder
 
 import config_data as cfg
 
-absolute_dir_path = os.path.abspath(os.path.dirname(__file__))
+
+absolute_dir_path = osp.abspath(osp.dirname(__file__))
 relative_path_ss_repo = osp.join(absolute_dir_path, "..")
 base_dir_repo = osp.abspath(relative_path_ss_repo)
 sys.path.append(osp.join(base_dir_repo, "sound-separation", "datasets", "fuss"))
@@ -164,7 +163,8 @@ if __name__ == '__main__':
                                   check_length=True, fix_length=True, check_mix=True, fix_mix=True,
                                   sample_rate=sample_rate, duration=clip_duration)
 
-    post_process_txt_labels(reverb_folder,
-                            output_folder=reverb_folder,
+    rev_subset_folder = osp.join(reverb_folder, subset)
+    post_process_txt_labels(rev_subset_folder,
+                            output_folder=rev_subset_folder,
                             output_tsv=out_tsv, rm_nOn_nOff=True)
     print(time.time() - t)
