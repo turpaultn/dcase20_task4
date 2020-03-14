@@ -159,7 +159,13 @@ class AugmentGaussianNoise(Transform):
                     numpy.ndarray
                     Modified features
                 """
-        std = np.mean(features ** 2 * 10 ** (-snr / 10), axis=0)
+        # If using source separation, using only the first audio (the mixture) to compute the gaussian noise,
+        # Otherwise it just removes the first axis if it was an extended one
+        if len(features.shape) == 3:
+            feat_used = features[0]
+        else:
+            feat_used = features
+        std = np.mean((feat_used ** 2) * (10 ** (-snr / 10)), axis=-2)
         try:
             noise = np.random.normal(0, std, features.shape)
         except Exception as e:

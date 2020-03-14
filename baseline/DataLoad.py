@@ -29,18 +29,18 @@ class DataLoadDf(Dataset):
     Prepare the data to be use in a batch mode
 
     Args:
-        df: pandas.DataFrame, the dataframe containing the set infromation (filenames, labels),
+        df: pandas.DataFrame, the dataframe containing the set infromation (feat_filenames, labels),
             it should contain these columns :
-            "filename"
-            "filename", "event_labels"
-            "filename", "onset", "offset", "event_label"
+            "feature_filename"
+            "feature_filename", "event_labels"
+            "feature_filename", "onset", "offset", "event_label"
         get_feature_file_func: function(), function which take a filename as input and return a feature file
         encode_function: function(), function which encode labels
         transform: function(), (Default value = None), function to be applied to the sample (pytorch transformations)
         return_indexes: bool, (Default value = False) whether or not to return indexes when use __getitem__
 
     Attributes:
-        df: pandas.DataFrame, the dataframe containing the set infromation (filenames, labels, ...)
+        df: pandas.DataFrame, the dataframe containing the set infromation (feat_filenames, labels, ...)
         get_feature_file_func: function(), function which take a filename as input and return a feature file
         encode_function: function(), function which encode labels
         transform : function(), function to be applied to the sample (pytorch transformations)
@@ -53,6 +53,7 @@ class DataLoadDf(Dataset):
         self.encode_function = encode_function
         self.transform = transform
         self.return_indexes = return_indexes
+        self.feat_filenames = df.feature_filename.drop_duplicates()
         self.filenames = df.filename.drop_duplicates()
         self.in_memory = in_memory
         if self.in_memory:
@@ -91,7 +92,7 @@ class DataLoadDf(Dataset):
             int
                 Length of the object
         """
-        length = len(self.filenames)
+        length = len(self.feat_filenames)
         return length
 
     def get_sample(self, index):
@@ -105,7 +106,7 @@ class DataLoadDf(Dataset):
             Tuple containing the features and the labels (numpy.array, numpy.array)
 
         """
-        features = self.get_feature_file_func(self.filenames.iloc[index])
+        features = self.get_feature_file_func(self.feat_filenames.iloc[index])
 
         # event_labels means weak labels, event_label means strong labels
         if "event_labels" in self.df.columns or {"onset", "offset", "event_label"}.issubset(self.df.columns):
@@ -120,7 +121,7 @@ class DataLoadDf(Dataset):
                         label = label.split(",")
             else:
                 cols = ["onset", "offset", "event_label"]
-                label = self.df[self.df.filename == self.filenames.iloc[index]][cols]
+                label = self.df[self.df.filename == self.feat_filenames.iloc[index]][cols]
                 if label.empty:
                     label = []
         else:
@@ -187,7 +188,7 @@ class DataLoadDfSS(DataLoadDf):
         if not self.in_memory or self.features.get(filename) is None:
             # Get the mixture
             arr_loaded_data = np.expand_dims(np.load(filename), 0)
-            # Get filenames of separated sources
+            # Get feat_filenames of separated sources
             path_to_search = os.path.join(os.path.splitext(filename)[0] + self.ss_pattern, "*.npy")
             filenames_to_load = glob.glob(path_to_search)
             if len(filenames_to_load) == 0:

@@ -4,6 +4,7 @@
 # Copyright Nicolas Turpault, Romain Serizel, Justin Salamon, Ankit Parag Shah, 2019, v1.0
 # This software is distributed under the terms of the License MIT
 #########################################################################
+import os
 from os import path as osp
 
 import psds_eval
@@ -206,7 +207,7 @@ def macro_f_measure(tp, fp, fn):
     return macro_f_score
 
 
-def get_predictions(model, valid_dataloader, decoder, pooling_time_ratio=1, save_predictions=None):
+def get_predictions(model, valid_dataloader, decoder, pooling_time_ratio=1, median_window=1, save_predictions=None):
     prediction_df = pd.DataFrame()
     for i, ((input_data, _), indexes) in enumerate(valid_dataloader):
         indexes = indexes.numpy()
@@ -221,7 +222,7 @@ def get_predictions(model, valid_dataloader, decoder, pooling_time_ratio=1, save
         for j, pred_strong_it in enumerate(pred_strong):
             pred_strong_it = ProbabilityEncoder().binarization(pred_strong_it, binarization_type="global_threshold",
                                                                threshold=0.5)
-            pred_strong_it = scipy.ndimage.filters.median_filter(pred_strong_it, (cfg.median_window, 1))
+            pred_strong_it = scipy.ndimage.filters.median_filter(pred_strong_it, (median_window, 1))
             pred = decoder(pred_strong_it)
             pred = pd.DataFrame(pred, columns=["event_label", "onset", "offset"])
             pred["filename"] = valid_dataloader.dataset.filenames.iloc[indexes[j]]
@@ -236,6 +237,9 @@ def get_predictions(model, valid_dataloader, decoder, pooling_time_ratio=1, save
     prediction_df.loc[:, "offset"] = prediction_df.offset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
     prediction_df = prediction_df.reset_index(drop=True)
     if save_predictions is not None:
+        dir_to_create = osp.dirname(save_predictions)
+        if dir_to_create != "":
+            os.makedirs(dir_to_create, exist_ok=True)
         logger.info("Saving predictions at: {}".format(save_predictions))
         prediction_df.to_csv(save_predictions, index=False, sep="\t", float_format="%.3f")
     return prediction_df

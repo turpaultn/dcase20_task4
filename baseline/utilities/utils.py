@@ -451,7 +451,7 @@ def generate_tsv_from_isolated_events(wav_folder, out_tsv=None):
                     if osp.splitext(fname)[1] in [".wav"]:
                         # Get the level folders and keep it in the tsv
                         subfolder = dir.split(dirname + os.sep)[1:]
-                        if len(subfolder)> 0:
+                        if len(subfolder) > 0:
                             subdirs = osp.join(*subfolder)
                         else:
                             subdirs = ""

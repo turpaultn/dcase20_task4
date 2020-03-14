@@ -44,6 +44,7 @@ f_max = 8000.
 max_consistency_cost = 2
 
 # Training
+in_memory=True
 num_workers = 12
 batch_size = 24
 # Todo, reput as normal
@@ -52,17 +53,19 @@ if torch.cuda.is_available():
     n_epoch = 200
     n_epoch_rampup = 50
 else:
-    n_epoch = 1
+    n_epoch = 2
     n_epoch_rampup = 1
 
 checkpoint_epochs = 1
 save_best = True
 
+adjust_lr = False
 max_learning_rate = 0.001
 
+default_learning_rate = 0.001
 
 # Post processing
-median_window = 5
+median_window_s = 0.45
 
 # Classes
 file_path = os.path.abspath(os.path.dirname(__file__))
