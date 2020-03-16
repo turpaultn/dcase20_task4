@@ -56,8 +56,8 @@ if __name__ == '__main__':
     import glob
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("-a", '--audio_path', type=str, required=True)
-    parser.add_argument("-o", '--output_folder', type=str)
-    parser.add_argument("-m", "--model_dir", type=str, default="")
+    parser.add_argument("-o", '--output_folder', type=str, required=True)
+    parser.add_argument("-m", "--model_dir", type=str, required=True)
     f_args = parser.parse_args()
 
     wav_list = glob.glob(osp.join(f_args.audio_path, "*.wav"))
