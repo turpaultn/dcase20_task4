@@ -121,7 +121,7 @@ class DataLoadDf(Dataset):
                         label = label.split(",")
             else:
                 cols = ["onset", "offset", "event_label"]
-                label = self.df[self.df.filename == self.feat_filenames.iloc[index]][cols]
+                label = self.df[self.df.filename == self.filenames.iloc[index]][cols]
                 if label.empty:
                     label = []
         else:
