@@ -128,33 +128,45 @@ class DESED:
             pd.DataFrame
             The dataframe containing the right features and labels
         """
+        # Parameters
         if audio_dir_ss is not None and pattern_ss is None:
             pattern_ss = "_events"
+        if audio_dir is None:
+            audio_dir = meta_path_to_audio_dir(tsv_path)
+        # Path to save features, subdir, otherwise could have duplicate paths for synthetic data
+        subdir = osp.sep.join(audio_dir.split(osp.sep)[-2:])
+        meta_feat_dir = osp.join(self.meta_feat_dir, subdir)
+        feature_dir = osp.join(self.feature_dir, subdir)
+        os.makedirs(meta_feat_dir, exist_ok=True)
+        os.makedirs(feature_dir, exist_ok=True)
 
         df_meta = self.get_df_from_meta(tsv_path, nb_files, pattern_ss=pattern_ss)
         logger.info("{} Total file number: {}".format(tsv_path, len(df_meta.filename.unique())))
-        if audio_dir is None:
-            audio_dir = meta_path_to_audio_dir(tsv_path)
+
+        # Download real data
         if download:
             # Get only one filename once
             filenames = df_meta.filename.drop_duplicates()
             self.download(filenames, audio_dir)
 
+        # Meta filename
         ext_tsv_feature = ""
         if audio_dir_ss is not None:
             ext_tsv_feature = ext_ss_feature_file
         fname, ext = osp.splitext(osp.basename(tsv_path))
-
-        feat_fname = fname + ext_tsv_feature +ext
+        feat_fname = fname + ext_tsv_feature + ext
         if nb_files is not None:
             feat_fname = f"{nb_files}_{feat_fname}"
-        features_tsv = osp.join(self.meta_feat_dir, feat_fname)
+        features_tsv = osp.join(meta_feat_dir, feat_fname)
+
         # if not osp.exists(features_tsv):
-        logger.info(f"Computing features ..., \nmetadata created: {features_tsv}")
-        df_features = self.extract_features_from_df(df_meta, audio_dir, audio_dir_ss, pattern_ss,
+        logger.info(f"Computing features ...")
+        df_features = self.extract_features_from_df(df_meta, audio_dir, feature_dir,
+                                                    audio_dir_ss, pattern_ss,
                                                     ext_ss_feature_file)
         if len(df_features) != 0:
             df_features.to_csv(features_tsv, sep="\t", index=False)
+            logger.info(f"metadata created: {features_tsv}")
         else:
             raise IndexError(f"Empty features DataFrames {features_tsv}")
         # else:
@@ -230,7 +242,7 @@ class DESED:
             except IOError as e:
                 logger.error(e)
 
-    def extract_features_from_df(self, df_meta, audio_dir, audio_dir_ss=None, pattern_ss=None,
+    def extract_features_from_df(self, df_meta, audio_dir, feature_dir, audio_dir_ss=None, pattern_ss=None,
                                  ext_ss_feature_file="_ss"):
         """Extract log mel spectrogram features.
 
@@ -247,6 +259,7 @@ class DESED:
         df_features = pd.DataFrame()
         fpaths = df_meta["filename"]
         uniq_fpaths = fpaths.drop_duplicates()
+
         for ind, filename in enumerate(uniq_fpaths):
             if ind % 500 == 0: logger.debug(ind)
 
@@ -257,14 +270,13 @@ class DESED:
                 df_meta = df_meta.drop(df_meta[df_meta.filename == filename].index)
             else:
                 if audio_dir_ss is None:
-                    out_filename = osp.splitext(filename)[0] + ".npy"
-                    out_path = osp.join(self.feature_dir, out_filename)
+                    out_filename = osp.join(osp.splitext(filename)[0] + ".npy")
+                    out_path = osp.join(feature_dir, out_filename)
                     self._extract_features(wav_path, out_path)
                 else:
-                    subdir = osp.sep.join(audio_dir.split(osp.sep)[-3:])
                     # To be changed if you have new separated sounds from the same mixture
-                    out_filename = osp.join(subdir, osp.splitext(filename)[0] + ext_ss_feature_file + ".npy")
-                    out_path = osp.join(self.feature_dir, out_filename)
+                    out_filename = osp.join(osp.splitext(filename)[0] + ext_ss_feature_file + ".npy")
+                    out_path = osp.join(feature_dir, out_filename)
                     bname, ext =  osp.splitext(filename)
                     wav_paths_ss = glob.glob(osp.join(audio_dir_ss, bname + pattern_ss, "*" + ext))
                     self._extract_features_ss(wav_path, wav_paths_ss, out_path)
