@@ -7,7 +7,7 @@ workspace = ".."
 # DESED Paths
 weak = os.path.join(workspace, 'dataset/metadata/train/weak.tsv')
 unlabel = os.path.join(workspace, 'dataset/metadata/train/unlabel_in_domain.tsv')
-synthetic = os.path.join(workspace, 'dataset/metadata/train/synthetic20_reverb/soundscapes.tsv')
+synthetic = os.path.join(workspace, 'dataset/metadata/train/synthetic.tsv')
 validation = os.path.join(workspace, 'dataset/metadata/validation/validation.tsv')
 test2018 = os.path.join(workspace, 'dataset/metadata/validation/test_dcase2018.tsv')
 eval2018 = os.path.join(workspace, 'dataset/metadata/validation/eval_dcase2018.tsv')
@@ -33,8 +33,8 @@ sample_rate = 16000
 max_len_seconds = 10.
 # features
 n_window = 2048
-hop_length = 256
-n_mels = 128
+hop_length = 255
+n_mels = 64
 max_frames = math.ceil(max_len_seconds * sample_rate / hop_length)
 
 f_min = 0.

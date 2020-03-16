@@ -203,7 +203,7 @@ def weights_init(m):
     """ Initialize the weights of some layers of neural networks, here Conv2D, BatchNorm, GRU, Linear
         Based on the work of Xavier Glorot
     Args:
-        m: the ss_model to initialize
+        m: the model to initialize
     """
     classname = m.__class__.__name__
     if classname.find('Conv2d') != -1:
@@ -239,18 +239,18 @@ def to_cuda_if_available(*args):
 
 
 class SaveBest:
-    """ Callback of a ss_model to store the best ss_model based on a criterion
+    """ Callback of a model to store the best model based on a criterion
     Args:
-        ss_model: torch.nn.Module, the ss_model which will be tracked
-        val_comp: str, (Default value = "inf") "inf" or "sup", inf when we store the lowest ss_model, sup when we
-            store the highest ss_model
+        model: torch.nn.Module, the model which will be tracked
+        val_comp: str, (Default value = "inf") "inf" or "sup", inf when we store the lowest model, sup when we
+            store the highest model
     Attributes:
-        ss_model: torch.nn.Module, the ss_model which will be tracked
-        val_comp: str, "inf" or "sup", inf when we store the lowest ss_model, sup when we
-            store the highest ss_model
-        best_val: float, the best values of the ss_model based on the criterion chosen
-        best_epoch: int, the epoch when the ss_model was the best
-        current_epoch: int, the current epoch of the ss_model
+        model: torch.nn.Module, the model which will be tracked
+        val_comp: str, "inf" or "sup", inf when we store the lowest model, sup when we
+            store the highest model
+        best_val: float, the best values of the model based on the criterion chosen
+        best_epoch: int, the epoch when the model was the best
+        current_epoch: int, the current epoch of the model
     """
     def __init__(self, val_comp="inf"):
         self.comp = val_comp
@@ -267,7 +267,7 @@ class SaveBest:
         """ Apply the callback
         Args:
             value: float, the value of the metric followed
-            model_path: str, the path where to store the ss_model
+            model_path: str, the path where to store the model
             parameters: dict, the parameters to be saved by pytorch in the file model_path.
             If model_path is not None, parameters is not None, and the other way around.
         """
@@ -283,20 +283,20 @@ class SaveBest:
 
 
 class EarlyStopping:
-    """ Callback of a ss_model to store the best ss_model based on a criterion
+    """ Callback of a model to store the best model based on a criterion
     Args:
-        model: torch.nn.Module, the ss_model which will be tracked
-        patience: int, number of epochs with no improvement before stopping the ss_model
-        val_comp: str, (Default value = "inf") "inf" or "sup", inf when we store the lowest ss_model, sup when we
-            store the highest ss_model
+        model: torch.nn.Module, the model which will be tracked
+        patience: int, number of epochs with no improvement before stopping the model
+        val_comp: str, (Default value = "inf") "inf" or "sup", inf when we store the lowest model, sup when we
+            store the highest model
     Attributes:
-        model: torch.nn.Module, the ss_model which will be tracked
-        patience: int, number of epochs with no improvement before stopping the ss_model
-        val_comp: str, "inf" or "sup", inf when we store the lowest ss_model, sup when we
-            store the highest ss_model
-        best_val: float, the best values of the ss_model based on the criterion chosen
-        best_epoch: int, the epoch when the ss_model was the best
-        current_epoch: int, the current epoch of the ss_model
+        model: torch.nn.Module, the model which will be tracked
+        patience: int, number of epochs with no improvement before stopping the model
+        val_comp: str, "inf" or "sup", inf when we store the lowest model, sup when we
+            store the highest model
+        best_val: float, the best values of the model based on the criterion chosen
+        best_epoch: int, the epoch when the model was the best
+        current_epoch: int, the current epoch of the model
     """
     def __init__(self, model, patience, val_comp="inf"):
         self.model = model
@@ -402,7 +402,8 @@ def get_transforms(frames, scaler=None, add_axis_conv=True, augment_type=None):
     # Todo, add other augmentations
     if augment_type is not None:
         if augment_type == "noise":
-            transf.append(AugmentGaussianNoise(mean=0., snr=15))
+            # transf.append(AugmentGaussianNoise(mean=0., snr=15))
+            transf.append(AugmentGaussianNoise(mean=0., std=0.5))
 
     transf.extend([ApplyLog(), PadOrTrunc(nb_frames=frames), ToTensor(unsqueeze_axis=unsqueeze_axis)])
     if scaler is not None:

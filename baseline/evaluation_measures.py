@@ -18,16 +18,16 @@ from psds_eval import PSDSEval
 
 import config as cfg
 from utilities.Logger import create_logger
-from utilities.utils import ManyHotEncoder, to_cuda_if_available, generate_tsv_wav_durations
+from utilities.utils import ManyHotEncoder, to_cuda_if_available
 
 logger = create_logger(__name__)
 
 
 def get_f_measure_by_class(torch_model, nb_tags, dataloader_, thresholds_=None):
-    """ get f measure for each class given a ss_model and a generator of data (batch_x, y)
+    """ get f measure for each class given a model and a generator of data (batch_x, y)
 
     Args:
-        torch_model : Model, ss_model to get predictions, forward should return weak and strong predictions
+        torch_model : Model, model to get predictions, forward should return weak and strong predictions
         nb_tags : int, number of classes which are represented
         dataloader_ : generator, data generator used to get f_measure
         thresholds_ : int or list, thresholds to apply to each class to binarize probabilities
@@ -52,7 +52,7 @@ def get_f_measure_by_class(torch_model, nb_tags, dataloader_, thresholds_=None):
         pred_weak = pred_weak.cpu().data.numpy()
         labels = y.numpy()
 
-        # Used only with a ss_model predicting only strong outputs
+        # Used only with a model predicting only strong outputs
         if len(pred_weak.shape) == 3:
             # average data to have weak labels
             pred_weak = np.max(pred_weak, axis=1)

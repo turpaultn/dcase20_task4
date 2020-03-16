@@ -76,6 +76,7 @@ if __name__ == '__main__':
     clip_duration = cfg.clip_duration
     sample_rate = cfg.sample_rate
     ref_db = cfg.ref_db
+    pitch_shift = cfg.pitch_shift
 
     # Defined
     fg_folder = osp.join(soundbank_path, "foreground")
@@ -123,7 +124,8 @@ if __name__ == '__main__':
                                            number=number,
                                            out_folder=full_out_folder,
                                            save_isolated_events=True,
-                                           start_from=start_from)
+                                           start_from=start_from,
+                                           pitch_shift=pitch_shift)
         if random_state is None:
             random_states = [None for i in range(nproc)]
         else:
@@ -142,7 +144,8 @@ if __name__ == '__main__':
         sg.generate_by_label_occurence(label_occurences=co_occur_dict,
                                        number=n_soundscapes,
                                        out_folder=full_out_folder,
-                                       save_isolated_events=True)
+                                       save_isolated_events=True,
+                                       pitch_shift=pitch_shift)
 
     # ##
     # Post processing
