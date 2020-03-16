@@ -7,7 +7,7 @@ workspace = ".."
 # DESED Paths
 weak = os.path.join(workspace, 'dataset/metadata/train/weak.tsv')
 unlabel = os.path.join(workspace, 'dataset/metadata/train/unlabel_in_domain.tsv')
-synthetic = os.path.join(workspace, 'dataset/metadata/train/synthetic.tsv')
+synthetic = os.path.join(workspace, 'dataset/metadata/train/synthetic20_pitch/soundscapes.tsv')
 validation = os.path.join(workspace, 'dataset/metadata/validation/validation.tsv')
 test2018 = os.path.join(workspace, 'dataset/metadata/validation/test_dcase2018.tsv')
 eval2018 = os.path.join(workspace, 'dataset/metadata/validation/eval_dcase2018.tsv')
@@ -34,7 +34,7 @@ max_len_seconds = 10.
 # features
 n_window = 2048
 hop_length = 255
-n_mels = 64
+n_mels = 128
 max_frames = math.ceil(max_len_seconds * sample_rate / hop_length)
 
 f_min = 0.
@@ -50,7 +50,7 @@ batch_size = 24
 # Todo, reput as normal
 import torch
 if torch.cuda.is_available():
-    n_epoch = 200
+    n_epoch = 100
     n_epoch_rampup = 50
 else:
     n_epoch = 2
@@ -58,6 +58,7 @@ else:
 
 checkpoint_epochs = 1
 save_best = True
+early_stopping = 10
 
 adjust_lr = False
 max_learning_rate = 0.001

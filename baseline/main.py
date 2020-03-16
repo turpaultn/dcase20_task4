@@ -6,6 +6,7 @@
 #########################################################################
 
 import argparse
+import datetime
 import functools
 import glob
 import inspect
@@ -33,7 +34,7 @@ from utilities.Logger import create_logger
 from utilities.Scaler import ScalerPerAudio, Scaler
 from utilities.utils import ManyHotEncoder, SaveBest, to_cuda_if_available, weights_init, \
     get_transforms, AverageMeterSet, generate_tsv_wav_durations, meta_path_to_audio_dir, audio_dir_to_meta_path, \
-    generate_tsv_from_isolated_events
+    generate_tsv_from_isolated_events, EarlyStopping
 
 
 def adjust_learning_rate(optimizer, rampup_value, rampdown_value=1):
@@ -86,7 +87,7 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
     start = time.time()
 
     # rampup_value = ramps.exp_rampup(epoch, cfg.n_epoch_rampup)
-    for i, (batch_input, ema_batch_input, target) in enumerate(train_loader):
+    for i, ((batch_input, ema_batch_input), target) in enumerate(train_loader):
         global_step = epoch * len(train_loader) + i
         rampup_value = ramps.exp_rampup(global_step, cfg.n_epoch_rampup*len(train_loader))
         # Todo check if this improves the performance
@@ -243,7 +244,8 @@ def get_dfs(desed_dataset, reduced_nb_data, separated_sources=False):
 
 if __name__ == '__main__':
     logger = create_logger(__name__ + "/" + inspect.currentframe().f_code.co_name, terminal_level=cfg.terminal_level)
-    logger.info("MEAN TEACHER")
+    logger.info("Baseline 2020")
+    logger.info(datetime.datetime.now())
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("-s", '--subpart_data', type=int, default=None, dest="subpart_data",
                         help="Number of files to be used. Useful when testing on small number of files.")
@@ -282,22 +284,22 @@ if __name__ == '__main__':
         n_channel = 1
         add_axis_conv = True
 
-    # n_layers = 5
-    # crnn_kwargs = {"n_in_channel": n_channel, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 128,
-    #                "n_layers_RNN": 2,
-    #                "activation": "glu",
-    #                "dropout": 0.5,
-    #                "kernel_size": n_layers * [3], "padding": n_layers * [1], "stride": n_layers * [1],
-    #                "nb_filters": [16,  32,  64,  128,  128],
-    #                "pooling": [[2, 2], [2, 2], [1, 2], [1, 4], [1, 4]]}
-    # pooling_time_ratio = 4  # 2 * 2
-    crnn_kwargs = {"n_in_channel": 1, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 64,
+    n_layers = 5
+    crnn_kwargs = {"n_in_channel": n_channel, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 128,
                    "n_layers_RNN": 2,
                    "activation": "glu",
                    "dropout": 0.5,
-                   "kernel_size": 3 * [3], "padding": 3 * [1], "stride": 3 * [1], "nb_filters": [64, 64, 64],
-                   "pooling": list(3 * ((2, 4),))}
-    pooling_time_ratio = 8  # 2 * 2 * 2
+                   "kernel_size": n_layers * [3], "padding": n_layers * [1], "stride": n_layers * [1],
+                   "nb_filters": [16,  32,  64,  128,  128],
+                   "pooling": [[2, 2], [2, 2], [1, 2], [1, 4], [1, 4]]}
+    pooling_time_ratio = 4  # 2 * 2
+    # crnn_kwargs = {"n_in_channel": 1, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 64,
+    #                "n_layers_RNN": 2,
+    #                "activation": "glu",
+    #                "dropout": 0.5,
+    #                "kernel_size": 3 * [3], "padding": 3 * [1], "stride": 3 * [1], "nb_filters": [64, 64, 64],
+    #                "pooling": list(3 * ((2, 4),))}
+    # pooling_time_ratio = 8  # 2 * 2 * 2
 
     out_nb_frames_1s = cfg.sample_rate / cfg.hop_length / pooling_time_ratio
     median_window = max(int(cfg.median_window_s * out_nb_frames_1s), 1)
@@ -323,7 +325,7 @@ if __name__ == '__main__':
 
     # Normalisation per audio or on the full dataset
     if cfg.scaler_type == "dataset":
-        transforms = get_transforms(cfg.max_frames)
+        transforms = get_transforms(cfg.max_frames, add_axis_conv=add_axis_conv)
         train_weak_data = DataLoadDf(dfs["train_weak"], many_hot_encoder.encode_strong_df,
                                      transform=transforms)
         unlabel_data = DataLoadDf(dfs["unlabel"],
@@ -382,6 +384,8 @@ if __name__ == '__main__':
 
     crnn_kwargs = crnn_kwargs
     crnn = CRNN(**crnn_kwargs)
+    pytorch_total_params = sum(p.numel() for p in crnn.parameters() if p.requires_grad)
+    logger.info("number of parameters in the model: {}".format(pytorch_total_params))
     crnn_ema = CRNN(**crnn_kwargs)
 
     crnn.apply(weights_init)
@@ -419,6 +423,8 @@ if __name__ == '__main__':
     }
 
     save_best_cb = SaveBest("sup")
+    if cfg.early_stopping is not None:
+        early_stopping_call = EarlyStopping(patience=cfg.early_stopping, val_comp="sup")
 
     # ##############
     # Train
@@ -477,6 +483,10 @@ if __name__ == '__main__':
         results.loc[epoch, "loss"] = loss.item()
         results.loc[epoch, "valid_synth_f1"] = valid_synth_f1
         results.loc[epoch, "weak_f1"] = weak_f1
+        if cfg.early_stopping:
+            if early_stopping_call.apply(global_valid):
+                logger.warn("EARLY STOPPING")
+                break
 
     if cfg.save_best:
         model_fname = os.path.join(saved_model_dir, "baseline_best")

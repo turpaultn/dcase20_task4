@@ -285,12 +285,10 @@ class SaveBest:
 class EarlyStopping:
     """ Callback of a model to store the best model based on a criterion
     Args:
-        model: torch.nn.Module, the model which will be tracked
         patience: int, number of epochs with no improvement before stopping the model
         val_comp: str, (Default value = "inf") "inf" or "sup", inf when we store the lowest model, sup when we
             store the highest model
     Attributes:
-        model: torch.nn.Module, the model which will be tracked
         patience: int, number of epochs with no improvement before stopping the model
         val_comp: str, "inf" or "sup", inf when we store the lowest model, sup when we
             store the highest model
@@ -298,9 +296,9 @@ class EarlyStopping:
         best_epoch: int, the epoch when the model was the best
         current_epoch: int, the current epoch of the model
     """
-    def __init__(self, model, patience, val_comp="inf"):
-        self.model = model
+    def __init__(self, patience, val_comp="inf", init_patience=0):
         self.patience = patience
+        self.first_early_wait = init_patience
         self.val_comp = val_comp
         if val_comp == "inf":
             self.best_val = np.inf
@@ -327,7 +325,8 @@ class EarlyStopping:
         if current:
             self.best_val = value
             self.best_epoch = self.current_epoch
-        elif self.current_epoch - self.best_epoch > self.patience:
+        elif self.current_epoch - self.best_epoch > self.patience and self.current_epoch > self.first_early_wait:
+            self.current_epoch = 0
             return True
         self.current_epoch += 1
         return False
