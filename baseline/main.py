@@ -86,7 +86,7 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
     start = time.time()
 
     # rampup_value = ramps.exp_rampup(epoch, cfg.n_epoch_rampup)
-    for i, ((batch_input, ema_batch_input), target) in enumerate(train_loader):
+    for i, (batch_input, ema_batch_input, target) in enumerate(train_loader):
         global_step = epoch * len(train_loader) + i
         rampup_value = ramps.exp_rampup(global_step, cfg.n_epoch_rampup*len(train_loader))
         # Todo check if this improves the performance
@@ -204,10 +204,10 @@ def get_dfs(desed_dataset, reduced_nb_data, separated_sources=False):
                                                         audio_dir_ss=audio_validation_ss, nb_files=reduced_nb_data)
 
     # Divide weak in train and valid
-    # train_weak_df = weak_df.sample(frac=0.8, random_state=26)
-    # valid_weak_df = weak_df.drop(train_weak_df.index).reset_index(drop=True)
-    # train_weak_df = train_weak_df.reset_index(drop=True)
-    # logger.debug(valid_weak_df.event_labels.value_counts())
+    train_weak_df = weak_df.sample(frac=0.8, random_state=26)
+    valid_weak_df = weak_df.drop(train_weak_df.index).reset_index(drop=True)
+    train_weak_df = train_weak_df.reset_index(drop=True)
+    logger.debug(valid_weak_df.event_labels.value_counts())
 
     # Divide synthetic in train and valid
     filenames_train = synthetic_df.filename.drop_duplicates().sample(frac=0.8, random_state=26)
@@ -226,8 +226,8 @@ def get_dfs(desed_dataset, reduced_nb_data, separated_sources=False):
     logger.info(f"eval2018 len: {len(eval_2018_df)}")
 
     data_dfs = {"weak": weak_df,
-                # "train_weak": train_weak_df,
-                # "valid_weak": valid_weak_df,
+                "train_weak": train_weak_df,
+                "valid_weak": valid_weak_df,
                 "unlabel": unlabel_df,
                 "synthetic": synthetic_df,
                 "train_synthetic": train_synth_df,
@@ -237,14 +237,6 @@ def get_dfs(desed_dataset, reduced_nb_data, separated_sources=False):
                 }
 
     return data_dfs
-
-
-# Todo Generate separate_wavs on all the data (weak, unlabel in domain...)
-# Function create df from ss_folder (write the ..._events folder in the df) (so maybe take a pattern as entry)
-# Extract features from df from the dataset, will work since we use the .._events folder in df
-# Create a Transform "ConcatMixturesSeparated" that replaces the unsqueeze_axis of ToTensor
-# (how do we do for the folder ??, do we do a match ?)
-# Adapt the CNN to take more than 1 channel at the beginning
 
 
 if __name__ == '__main__':
@@ -288,15 +280,23 @@ if __name__ == '__main__':
         n_channel = 1
         add_axis_conv = True
 
-    n_layers = 5
-    crnn_kwargs = {"n_in_channel": n_channel, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 128,
+    # n_layers = 5
+    # crnn_kwargs = {"n_in_channel": n_channel, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 128,
+    #                "n_layers_RNN": 2,
+    #                "activation": "glu",
+    #                "dropout": 0.5,
+    #                "kernel_size": n_layers * [3], "padding": n_layers * [1], "stride": n_layers * [1],
+    #                "nb_filters": [16,  32,  64,  128,  128],
+    #                "pooling": [[2, 2], [2, 2], [1, 2], [1, 4], [1, 4]]}
+    # pooling_time_ratio = 4  # 2 * 2
+    crnn_kwargs = {"n_in_channel": 1, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 64,
                    "n_layers_RNN": 2,
                    "activation": "glu",
                    "dropout": 0.5,
-                   "kernel_size": n_layers * [3], "padding": n_layers * [1], "stride": n_layers * [1],
-                   "nb_filters": [16,  32,  64,  128,  128],
-                   "pooling": [[2, 2], [2, 2], [1, 2], [1, 4], [1, 4]]}
-    pooling_time_ratio = 4  # 2 * 2
+                   "kernel_size": 3 * [3], "padding": 3 * [1], "stride": 3 * [1], "nb_filters": [64, 64, 64],
+                   "pooling": list(3 * ((2, 4),))}
+    pooling_time_ratio = 8  # 2 * 2 * 2
+
     out_nb_frames_1s = cfg.sample_rate / cfg.hop_length / pooling_time_ratio
     median_window = max(int(cfg.median_window_s * out_nb_frames_1s), 1)
     logger.debug(f"median_window: {median_window}")
@@ -319,9 +319,10 @@ if __name__ == '__main__':
     classes = cfg.classes
     many_hot_encoder = ManyHotEncoder(classes, n_frames=cfg.max_frames // pooling_time_ratio)
 
+    # Normalisation per audio or on the full dataset
     if cfg.scaler_type == "dataset":
         transforms = get_transforms(cfg.max_frames)
-        train_weak_data = DataLoadDf(dfs["weak"], many_hot_encoder.encode_strong_df,
+        train_weak_data = DataLoadDf(dfs["train_weak"], many_hot_encoder.encode_strong_df,
                                      transform=transforms)
         unlabel_data = DataLoadDf(dfs["unlabel"],
                                   many_hot_encoder.encode_strong_df,
@@ -333,6 +334,7 @@ if __name__ == '__main__':
         scaler = Scaler()
         # # Only on real data since that's our final goal and test data are real
         scaler.calculate_scaler(ConcatDataset([train_weak_data, unlabel_data, train_synth_data]))
+        logger.debug(f"scaler mean: {scaler.mean_}")
     else:
         scaler_args = [cfg.scale_peraudio_on, cfg.scale_peraudio_type]
         scaler = ScalerPerAudio(*scaler_args)
@@ -340,16 +342,17 @@ if __name__ == '__main__':
     transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv=add_axis_conv, augment_type="noise")
     transforms_valid = get_transforms(cfg.max_frames, scaler=scaler, add_axis_conv=add_axis_conv)
 
-    train_weak_data = DataLoadDf(dfs["weak"], many_hot_encoder.encode_strong_df, transform=transforms,
+    train_weak_data = DataLoadDf(dfs["train_weak"], many_hot_encoder.encode_strong_df, transform=transforms,
                                  in_memory=cfg.in_memory)
     unlabel_data = DataLoadDf(dfs["unlabel"], many_hot_encoder.encode_strong_df, transform=transforms,
                               in_memory=cfg.in_memory)
-
     train_synth_data = DataLoadDf(dfs["train_synthetic"], many_hot_encoder.encode_strong_df, transform=transforms,
                                   in_memory=cfg.in_memory)
 
     valid_synth_data = DataLoadDf(dfs["valid_synthetic"], many_hot_encoder.encode_strong_df,
                                   transform=transforms_valid, return_indexes=True, in_memory=cfg.in_memory)
+    valid_weak_data = DataLoadDf(dfs["valid_weak"], many_hot_encoder.encode_weak,
+                                 transform=transforms_valid, in_memory=cfg.in_memory)
 
     logger.debug(f"len synth: {len(train_synth_data)}, len_unlab: {len(unlabel_data)}, "
                  f"len weak: {len(train_weak_data)}")
@@ -441,6 +444,12 @@ if __name__ == '__main__':
         except Exception as e:
             logger.error("psds did not work ....")
 
+        logger.info("\n ### Valid weak metric ### \n")
+        weak_metric = get_f_measure_by_class(crnn, len(classes),
+                                             DataLoader(valid_weak_data, batch_size=cfg.batch_size))
+        logger.info("Weak F1-score per class: \n {}".format(pd.DataFrame(weak_metric * 100, many_hot_encoder.labels)))
+        logger.info("Weak F1-score macro averaged: {}".format(np.mean(weak_metric)))
+
         state['model']['state_dict'] = crnn.state_dict()
         state['model_ema']['state_dict'] = crnn_ema.state_dict()
         state['optimizer']['state_dict'] = optimizer.state_dict()
@@ -451,14 +460,21 @@ if __name__ == '__main__':
             torch.save(state, model_fname)
 
         valid_synth_f1 = valid_events_metric.results_class_wise_average_metrics()['f_measure']['f_measure']
+        weak_f1 = np.mean(weak_metric)
+        if not no_synthetic:
+            global_valid = valid_synth_f1 + weak_f1
+        else:
+            global_valid = weak_f1
+
         if cfg.save_best:
-            if save_best_cb.apply(valid_synth_f1):
+            if save_best_cb.apply(global_valid):
                 model_fname = os.path.join(saved_model_dir, "baseline_best")
                 torch.save(state, model_fname)
 
-            results.loc[epoch, "global_valid"] = valid_synth_f1
+            results.loc[epoch, "global_valid"] = global_valid
         results.loc[epoch, "loss"] = loss.item()
         results.loc[epoch, "valid_synth_f1"] = valid_synth_f1
+        results.loc[epoch, "weak_f1"] = weak_f1
 
     if cfg.save_best:
         model_fname = os.path.join(saved_model_dir, "baseline_best")
@@ -477,9 +493,9 @@ if __name__ == '__main__':
     predicitons_fname18 = os.path.join(saved_pred_dir, "baseline_eval18.tsv")
 
     validation_data = DataLoadDf(dfs["validation"], many_hot_encoder.encode_strong_df,
-                                 transform=transforms_valid, return_indexes=True, in_memory=cfg.in_memory)
+                                 transform=transforms_valid, return_indexes=True)
     eval18_data = DataLoadDf(dfs["eval2018"], many_hot_encoder.encode_strong_df,
-                             transform=transforms_valid, return_indexes=True, in_memory=cfg.in_memory)
+                             transform=transforms_valid, return_indexes=True)
 
     validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
     valid_predictions = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,

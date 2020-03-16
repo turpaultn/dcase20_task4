@@ -144,30 +144,23 @@ class DESED:
         if audio_dir_ss is not None:
             ext_tsv_feature = ext_ss_feature_file
         fname, ext = osp.splitext(osp.basename(tsv_path))
-        features_tsv = osp.join(self.meta_feat_dir, f"{nb_files}_{fname}{ext_tsv_feature}{ext}")
-        if not osp.exists(features_tsv):
-            logger.info(f"Computing features ..., metadata created: {features_tsv}")
-            df_features = self.extract_features_from_df(df_meta, audio_dir, audio_dir_ss, pattern_ss,
-                                                        ext_ss_feature_file)
+
+        feat_fname = fname + ext_tsv_feature +ext
+        if nb_files is not None:
+            feat_fname = f"{nb_files}_{feat_fname}"
+        features_tsv = osp.join(self.meta_feat_dir, feat_fname)
+        # if not osp.exists(features_tsv):
+        logger.info(f"Computing features ..., \nmetadata created: {features_tsv}")
+        df_features = self.extract_features_from_df(df_meta, audio_dir, audio_dir_ss, pattern_ss,
+                                                    ext_ss_feature_file)
+        if len(df_features) != 0:
             df_features.to_csv(features_tsv, sep="\t", index=False)
         else:
-            logger.info(f"loading features, metadata: {features_tsv}")
-            df_features = pd.read_csv(features_tsv, sep="\t")
+            raise IndexError(f"Empty features DataFrames {features_tsv}")
+        # else:
+        #     logger.info(f"loading features, \nmetadata: {features_tsv}")
+        #     df_features = pd.read_csv(features_tsv, sep="\t")
         return df_features
-
-    def get_feature_file(self, filename):
-        """
-        Get a feature file from a filename
-        Args:
-            filename:  str, name of the file to get the feature
-
-        Returns:
-            numpy.array
-            containing the features computed previously
-        """
-        fname = osp.join(self.feature_dir, osp.splitext(filename)[0] + ".npy")
-        data = np.load(fname)
-        return data
 
     @staticmethod
     def calculate_mel_spec(audio, compute_log=False):
@@ -268,8 +261,9 @@ class DESED:
                     out_path = osp.join(self.feature_dir, out_filename)
                     self._extract_features(wav_path, out_path)
                 else:
+                    subdir = osp.sep.join(audio_dir.split(osp.sep)[-3:])
                     # To be changed if you have new separated sounds from the same mixture
-                    out_filename = osp.splitext(filename)[0] + ext_ss_feature_file + ".npy"
+                    out_filename = osp.join(subdir, osp.splitext(filename)[0] + ext_ss_feature_file + ".npy")
                     out_path = osp.join(self.feature_dir, out_filename)
                     bname, ext =  osp.splitext(filename)
                     wav_paths_ss = glob.glob(osp.join(audio_dir_ss, bname + pattern_ss, "*" + ext))

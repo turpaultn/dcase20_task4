@@ -5,46 +5,247 @@ import numpy as np
 import torch
 
 
-class Transform:
-    def transform_data(self, data):
-        # Mandatory to be defined by subclasses
-        raise NotImplementedError("Abstract object")
+# class Transform:
+#     def transform_data(self, data):
+#         # Mandatory to be defined by subclasses
+#         raise NotImplementedError("Abstract object")
+#
+#     def transform_label(self, label):
+#         # Do nothing, to be changed in subclasses if needed
+#         return label
+#
+#     def _apply_transform(self, sample_no_index):
+#         data, label = sample_no_index
+#         if type(data) is tuple:  # meaning there is more than one data_input (could be duet, triplet...)
+#             data = list(data)
+#             for k in range(len(data)):
+#                 data[k] = self.transform_data(data[k])
+#             data = tuple(data)
+#         else:
+#             data = self.transform_data(data)
+#         label = self.transform_label(label)
+#         return data, label
+#
+#     def __call__(self, sample):
+#         """ Apply the transformation
+#         Args:
+#             sample: tuple, a sample defined by a DataLoad class
+#
+#         Returns:
+#             tuple
+#             The transformed tuple
+#         """
+#         if type(sample[1]) is int:  # Means there is an index, may be another way to make it cleaner
+#             sample_data, index = sample
+#             sample_data = self._apply_transform(sample_data)
+#             sample = sample_data, index
+#         else:
+#             sample = self._apply_transform(sample)
+#         return sample
+#
+#
+# class GaussianNoise(Transform):
+#     """ Apply gaussian noise
+#         Args:
+#             mean: float, the mean of the gaussian distribution.
+#             std: float, standard deviation of the gaussian distribution.
+#         Attributes:
+#             mean: float, the mean of the gaussian distribution.
+#             std: float, standard deviation of the gaussian distribution.
+#         """
+#
+#     def __init__(self, mean=0, std=0.5):
+#         self.mean = mean
+#         self.std = std
+#
+#     def transform_data(self, data):
+#         """ Apply the transformation on data
+#         Args:
+#             data: np.array, the data to be modified
+#
+#         Returns:
+#             np.array
+#             The transformed data
+#         """
+#         return data + np.abs(np.random.normal(0, 0.5 ** 2, data.shape))
+#
+#
+# class ApplyLog(Transform):
+#     """Convert ndarrays in sample to Tensors."""
+#
+#     def transform_data(self, data):
+#         """ Apply the transformation on data
+#         Args:
+#             data: np.array, the data to be modified
+#
+#         Returns:
+#             np.array
+#             The transformed data
+#         """
+#         return librosa.amplitude_to_db(data.T).T
+#
+#
+# def pad_trunc_seq(x, max_len):
+#     """Pad or truncate a sequence data to a fixed length.
+#     The sequence should be on axis -2.
+#
+#     Args:
+#       x: ndarray, input sequence data.
+#       max_len: integer, length of sequence to be padded or truncated.
+#
+#     Returns:
+#       ndarray, Padded or truncated input sequence data.
+#     """
+#     shape = x.shape
+#     if shape[-2] <= max_len:
+#         padded = max_len - shape[-2]
+#         padded_shape = ((0, 0),)*len(shape[:-2]) + ((0, padded), (0, 0))
+#         x = np.pad(x, padded_shape, mode="constant")
+#     else:
+#         x = x[..., :max_len, :]
+#     return x
+#
+#
+# class PadOrTrunc(Transform):
+#     """ Pad or truncate a sequence given a number of frames
+#     Args:
+#         nb_frames: int, the number of frames to match
+#     Attributes:
+#         nb_frames: int, the number of frames to match
+#     """
+#
+#     def __init__(self, nb_frames, apply_to_label=False):
+#         self.nb_frames = nb_frames
+#         self.apply_to_label = apply_to_label
+#
+#     def transform_label(self, label):
+#         if self.apply_to_label:
+#             return pad_trunc_seq(label, self.nb_frames)
+#         else:
+#             return label
+#
+#     def transform_data(self, data):
+#         """ Apply the transformation on data
+#         Args:
+#             data: np.array, the data to be modified
+#
+#         Returns:
+#             np.array
+#             The transformed data
+#         """
+#         return pad_trunc_seq(data, self.nb_frames)
+#
+#
+# class AugmentGaussianNoise(Transform):
+#     """ Pad or truncate a sequence given a number of frames
+#            Args:
+#                mean: float, mean of the Gaussian noise to add
+#            Attributes:
+#                std: float, std of the Gaussian noise to add
+#            """
+#
+#     def __init__(self, mean=0, std=None, snr=None):
+#         self.mean = mean
+#         self.std = std
+#         self.snr = snr
+#
+#     @staticmethod
+#     def gaussian_noise(features, snr):
+#         """Apply gaussian noise on each point of the data
+#
+#                 Args:
+#                     features: numpy.array, features to be modified
+#                 Returns:
+#                     numpy.ndarray
+#                     Modified features
+#                 """
+#         # If using source separation, using only the first audio (the mixture) to compute the gaussian noise,
+#         # Otherwise it just removes the first axis if it was an extended one
+#         if len(features.shape) == 3:
+#             feat_used = features[0]
+#         else:
+#             feat_used = features
+#         std = np.mean((feat_used ** 2) * (10 ** (-snr / 10)), axis=-2)
+#         try:
+#             noise = np.random.normal(0, std, features.shape)
+#         except Exception as e:
+#             warnings.warn(f"the computed noise did not work std: {std}, using 0.5 for std instead")
+#             noise = np.random.normal(0, 0.5, features.shape)
+#
+#         return features + noise
+#
+#     def transform_data(self, data):
+#         """ Apply the transformation on data
+#             Args:
+#                 data: np.array, the data to be modified
+#
+#             Returns:
+#                 (np.array, np.array)
+#                 (original data, noisy_data (data + noise))
+#         """
+#         if self.std is not None:
+#             noisy_data = data + np.abs(np.random.normal(0, 0.5 ** 2, data.shape))
+#         elif self.snr is not None:
+#             noisy_data = self.gaussian_noise(data, self.snr)
+#         else:
+#             raise NotImplementedError("Only (mean, std) or snr can be given")
+#         return data, noisy_data
+#
+#
+# class ToTensor(Transform):
+#     """Convert ndarrays in sample to Tensors.
+#     Args:
+#         unsqueeze_axis: int, (Default value = None) add an dimension to the axis mentioned.
+#             Useful to add a channel axis to use CNN.
+#     Attributes:
+#         unsqueeze_axis: int, add an dimension to the axis mentioned.
+#             Useful to add a channel axis to use CNN.
+#     """
+#     def __init__(self, unsqueeze_axis=None):
+#         self.unsqueeze_axis = unsqueeze_axis
+#
+#     def transform_data(self, data):
+#         """ Apply the transformation on data
+#             Args:
+#                 data: np.array, the data to be modified
+#
+#             Returns:
+#                 np.array
+#                 The transformed data
+#         """
+#         res_data = torch.from_numpy(data).float()
+#         if self.unsqueeze_axis is not None:
+#             res_data = res_data.unsqueeze(self.unsqueeze_axis)
+#         return res_data
+#
+#     def transform_label(self, label):
+#         return torch.from_numpy(label).float()  # float otherwise error
+#
+#
+# class Normalize(Transform):
+#     """Normalize inputs
+#     Args:
+#         scaler: Scaler object, the scaler to be used to normalize the data
+#     Attributes:
+#         scaler : Scaler object, the scaler to be used to normalize the data
+#     """
+#
+#     def __init__(self, scaler):
+#         self.scaler = scaler
+#
+#     def transform_data(self, data):
+#         """ Apply the transformation on data
+#             Args:
+#                 data: np.array, the data to be modified
+#
+#             Returns:
+#                 np.array
+#                 The transformed data
+#         """
+#         return self.scaler.normalize(data)
 
-    def transform_label(self, label):
-        # Do nothing, to be changed in subclasses if needed
-        return label
 
-    def _apply_transform(self, sample_no_index):
-        data, label = sample_no_index
-        if type(data) is tuple:  # meaning there is more than one data_input (could be duet, triplet...)
-            data = list(data)
-            for k in range(len(data)):
-                data[k] = self.transform_data(data[k])
-            data = tuple(data)
-        else:
-            data = self.transform_data(data)
-        label = self.transform_label(label)
-        return data, label
-
-    def __call__(self, sample):
-        """ Apply the transformation
-        Args:
-            sample: tuple, a sample defined by a DataLoad class
-
-        Returns:
-            tuple
-            The transformed tuple
-        """
-        if type(sample[1]) is int:  # Means there is an index, may be another way to make it cleaner
-            sample_data, index = sample
-            sample_data = self._apply_transform(sample_data)
-            sample = sample_data, index
-        else:
-            sample = self._apply_transform(sample)
-        return sample
-
-
-class GaussianNoise(Transform):
+class GaussianNoise:
     """ Apply gaussian noise
         Args:
             mean: float, the mean of the gaussian distribution.
@@ -58,36 +259,47 @@ class GaussianNoise(Transform):
         self.mean = mean
         self.std = std
 
-    def transform_data(self, data):
-        """ Apply the transformation on data
+    def __call__(self, sample):
+        """ Apply the transformation
         Args:
-            data: np.array, the data to be modified
+            sample: tuple or list, a sample defined by a DataLoad class
 
         Returns:
-            np.array
-            The transformed data
+            list
+            The transformed tuple
         """
-        return data + np.abs(np.random.normal(0, 0.5 ** 2, data.shape))
+        if type(sample) is tuple:
+            sample = list(sample)
+        # sample must be a tuple or a list, not apply on labels
+        for k in range(len(sample) - 1):
+            sample[k] = sample[k] + np.abs(np.random.normal(0, 0.5 ** 2, sample[k].shape))
+
+        return sample
 
 
-class ApplyLog(Transform):
+class ApplyLog(object):
     """Convert ndarrays in sample to Tensors."""
 
-    def transform_data(self, data):
-        """ Apply the transformation on data
+    def __call__(self, sample):
+        """ Apply the transformation
         Args:
-            data: np.array, the data to be modified
+
+        sample: tuple, a sample defined by a DataLoad class
 
         Returns:
-            np.array
-            The transformed data
+            tuple
+            The transformed tuple
         """
-        return librosa.amplitude_to_db(data.T).T
+        # sample must be a tuple or a list, first parts are input, then last element is label
+        if type(sample) is tuple:
+            sample = list(sample)
+        for i in range(len(sample) - 1):
+            sample[i] = librosa.amplitude_to_db(sample[i].T).T
+        return sample
 
 
 def pad_trunc_seq(x, max_len):
     """Pad or truncate a sequence data to a fixed length.
-    The sequence should be on axis -2.
 
     Args:
       x: ndarray, input sequence data.
@@ -96,17 +308,20 @@ def pad_trunc_seq(x, max_len):
     Returns:
       ndarray, Padded or truncated input sequence data.
     """
+    length = len(x)
     shape = x.shape
-    if shape[-2] <= max_len:
-        padded = max_len - shape[-2]
-        padded_shape = ((0, 0),)*len(shape[:-2]) + ((0, padded), (0, 0))
-        x = np.pad(x, padded_shape, mode="constant")
+    if length < max_len:
+        pad_shape = (max_len - length,) + shape[1:]
+        pad = np.zeros(pad_shape)
+        x_new = np.concatenate((x, pad), axis=0)
+    elif length > max_len:
+        x_new = x[0:max_len]
     else:
-        x = x[..., :max_len, :]
-    return x
+        x_new = x
+    return x_new
 
 
-class PadOrTrunc(Transform):
+class PadOrTrunc:
     """ Pad or truncate a sequence given a number of frames
     Args:
         nb_frames: int, the number of frames to match
@@ -114,29 +329,28 @@ class PadOrTrunc(Transform):
         nb_frames: int, the number of frames to match
     """
 
-    def __init__(self, nb_frames, apply_to_label=False):
+    def __init__(self, nb_frames):
         self.nb_frames = nb_frames
-        self.apply_to_label = apply_to_label
 
-    def transform_label(self, label):
-        if self.apply_to_label:
-            return pad_trunc_seq(label, self.nb_frames)
-        else:
-            return label
-
-    def transform_data(self, data):
-        """ Apply the transformation on data
+    def __call__(self, sample):
+        """ Apply the transformation
         Args:
-            data: np.array, the data to be modified
+            sample: tuple or list, a sample defined by a DataLoad class
 
         Returns:
-            np.array
-            The transformed data
+            list
+            The transformed tuple
         """
-        return pad_trunc_seq(data, self.nb_frames)
+        if type(sample) is tuple:
+            sample = list(sample)
+        # sample must be a tuple or a list
+        for k in range(len(sample) - 1):
+            sample[k] = pad_trunc_seq(sample[k], self.nb_frames)
+
+        return sample
 
 
-class AugmentGaussianNoise(Transform):
+class AugmentGaussianNoise:
     """ Pad or truncate a sequence given a number of frames
            Args:
                mean: float, mean of the Gaussian noise to add
@@ -144,55 +358,27 @@ class AugmentGaussianNoise(Transform):
                std: float, std of the Gaussian noise to add
            """
 
-    def __init__(self, mean=0, std=None, snr=None):
+    def __init__(self, mean=0, std=0.5):
         self.mean = mean
         self.std = std
-        self.snr = snr
 
-    @staticmethod
-    def gaussian_noise(features, snr):
-        """Apply gaussian noise on each point of the data
+    def __call__(self, sample):
+        """ Apply the transformation
+        Args:
+            sample: tuple or list, a sample defined by a DataLoad class
 
-                Args:
-                    features: numpy.array, features to be modified
-                Returns:
-                    numpy.ndarray
-                    Modified features
-                """
-        # If using source separation, using only the first audio (the mixture) to compute the gaussian noise,
-        # Otherwise it just removes the first axis if it was an extended one
-        if len(features.shape) == 3:
-            feat_used = features[0]
-        else:
-            feat_used = features
-        std = np.mean((feat_used ** 2) * (10 ** (-snr / 10)), axis=-2)
-        try:
-            noise = np.random.normal(0, std, features.shape)
-        except Exception as e:
-            warnings.warn(f"the computed noise did not work std: {std}, using 0.5 for std instead")
-            noise = np.random.normal(0, 0.5, features.shape)
-
-        return features + noise
-
-    def transform_data(self, data):
-        """ Apply the transformation on data
-            Args:
-                data: np.array, the data to be modified
-
-            Returns:
-                (np.array, np.array)
-                (original data, noisy_data (data + noise))
+        Returns:
+            list
+            The transformed tuple
         """
-        if self.std is not None:
-            noisy_data = data + np.abs(np.random.normal(0, 0.5 ** 2, data.shape))
-        elif self.snr is not None:
-            noisy_data = self.gaussian_noise(data, self.snr)
-        else:
-            raise NotImplementedError("Only (mean, std) or snr can be given")
-        return data, noisy_data
+        sample, label = sample
+
+        noise = sample + np.abs(np.random.normal(0, 0.5 ** 2, sample.shape))
+
+        return sample, noise, label
 
 
-class ToTensor(Transform):
+class ToTensor(object):
     """Convert ndarrays in sample to Tensors.
     Args:
         unsqueeze_axis: int, (Default value = None) add an dimension to the axis mentioned.
@@ -204,25 +390,29 @@ class ToTensor(Transform):
     def __init__(self, unsqueeze_axis=None):
         self.unsqueeze_axis = unsqueeze_axis
 
-    def transform_data(self, data):
-        """ Apply the transformation on data
-            Args:
-                data: np.array, the data to be modified
+    def __call__(self, sample):
+        """ Apply the transformation
+        Args:
+            sample : tuple or list, a sample defined by a DataLoad class
 
-            Returns:
-                np.array
-                The transformed data
+        Returns:
+            list
+            The transformed tuple
         """
-        res_data = torch.from_numpy(data).float()
-        if self.unsqueeze_axis is not None:
-            res_data = res_data.unsqueeze(self.unsqueeze_axis)
-        return res_data
+        if type(sample) is tuple:
+            sample = list(sample)
+        # sample must be a tuple or a list, first parts are input, then last element is label
+        for i in range(len(sample)):
+            sample[i] = torch.from_numpy(sample[i]).float()  # even labels (we don't loop until -1)
 
-    def transform_label(self, label):
-        return torch.from_numpy(label).float()  # float otherwise error
+        for i in range(len(sample) - 1):
+            if self.unsqueeze_axis is not None:
+                sample[i] = sample[i].unsqueeze(self.unsqueeze_axis)
+
+        return sample
 
 
-class Normalize(Transform):
+class Normalize(object):
     """Normalize inputs
     Args:
         scaler: Scaler object, the scaler to be used to normalize the data
@@ -233,13 +423,19 @@ class Normalize(Transform):
     def __init__(self, scaler):
         self.scaler = scaler
 
-    def transform_data(self, data):
-        """ Apply the transformation on data
-            Args:
-                data: np.array, the data to be modified
+    def __call__(self, sample):
+        """ Apply the transformation
+        Args:
+            sample: tuple or list, a sample defined by a DataLoad class
 
-            Returns:
-                np.array
-                The transformed data
+        Returns:
+            list
+            The transformed tuple
         """
-        return self.scaler.normalize(data)
+        if type(sample) is tuple:
+            sample = list(sample)
+        # sample must be a tuple or a list
+        for k in range(len(sample) - 1):
+            sample[k] = self.scaler.normalize(sample[k])
+
+        return sample
