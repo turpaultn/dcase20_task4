@@ -95,7 +95,6 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
         meters.update('lr', optimizer.param_groups[0]['lr'])
 
         batch_input, ema_batch_input, target = to_cuda_if_available(batch_input, ema_batch_input, target)
-        logger.debug(batch_input.mean())
         # Outputs
         strong_pred_ema, weak_pred_ema = ema_model(ema_batch_input)
         strong_pred_ema = strong_pred_ema.detach()
@@ -111,11 +110,13 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
             ema_class_loss = class_criterion(weak_pred_ema[weak_mask], target_weak[weak_mask])
 
             if i == 0:
-                logger.debug("target: {}".format(target.mean(-2)))
-                logger.debug("Target_weak: {}".format(target_weak))
-                logger.debug("Target_weak mask: {}".format(target_weak[weak_mask]))
+                logger.debug(f"target: {target.mean(-2)}")
+                logger.debug(f"Target_weak: {target_weak}")
+                logger.debug(f"Target_weak mask: {target_weak[weak_mask]}")
+                logger.debug(f"Target strong mask: {target[strong_mask]}")
                 logger.debug(weak_class_loss)
-                logger.debug("rampup_value: {}".format(rampup_value))
+                logger.debug(f"rampup_value: {rampup_value}")
+                logger.debug(f"tensor mean: {batch_input.mean()}")
             meters.update('weak_class_loss', weak_class_loss.item())
 
             meters.update('Weak EMA loss', ema_class_loss.item())
@@ -200,6 +201,7 @@ def get_dfs(desed_dataset, reduced_nb_data, separated_sources=False):
     # Event if synthetic not used for training, used on validation purpose
     synthetic_df = desed_dataset.initialize_and_get_df(cfg.synthetic, audio_dir_ss=audio_synthetic_ss,
                                                        nb_files=reduced_nb_data, download=False)
+    logger.debug(f"synthetic: {synthetic_df.head()}")
     validation_df = desed_dataset.initialize_and_get_df(cfg.validation, audio_dir=cfg.audio_validation_dir,
                                                         audio_dir_ss=audio_validation_ss, nb_files=reduced_nb_data)
 
