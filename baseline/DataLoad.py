@@ -18,10 +18,11 @@ from torch.utils.data import Dataset
 from torch.utils.data.sampler import Sampler
 
 from utilities.Logger import create_logger
+import config as cfg
 
 torch.manual_seed(0)
 random.seed(0)
-logger = create_logger(__name__)
+logger = create_logger(__name__, terminal_level=cfg.terminal_level)
 
 
 class DataLoadDf(Dataset):

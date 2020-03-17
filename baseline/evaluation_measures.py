@@ -233,8 +233,8 @@ def get_predictions(model, valid_dataloader, decoder, pooling_time_ratio=1, medi
                 logger.debug("predictions strong: \n{}".format(pred_strong_it))
 
     # In seconds
-    prediction_df.loc[:, "onset"] = prediction_df.onset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
-    prediction_df.loc[:, "offset"] = prediction_df.offset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_length)
+    prediction_df.loc[:, "onset"] = prediction_df.onset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_size)
+    prediction_df.loc[:, "offset"] = prediction_df.offset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_size)
     prediction_df = prediction_df.reset_index(drop=True)
     if save_predictions is not None:
         dir_to_create = osp.dirname(save_predictions)

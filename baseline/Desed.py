@@ -20,9 +20,9 @@ import pandas as pd
 import config as cfg
 from desed.download_real import download
 from utilities.Logger import create_logger
-from utilities.utils import read_audio, meta_path_to_audio_dir, generate_tsv_from_isolated_events
+from utilities.utils import read_audio, meta_path_to_audio_dir
 
-logger = create_logger(__name__)
+logger = create_logger(__name__, terminal_level=cfg.terminal_level)
 
 
 class DESED:
@@ -43,13 +43,13 @@ class DESED:
     - dataset
         - metadata
             - train
-                - weak.tsv              (will search filename in audio/train/weak)
+                - weak.tsv              (audio_dir associated: audio/train/weak)
             - validation
-                - validation.tsv        (will search filename in audio/validation because `merged_folders_name=["validation"]`)
-                - test_dcase2018.tsv    (will search filename in audio/validation because `merged_folders_name=["validation"]`)
-                - eval_dcase2018.tsv    (will search filename in audio/validation because `merged_folders_name=["validation"]`)
+                - validation.tsv        (audio_dir associated: audio/validation)
+                - test_dcase2018.tsv    (audio_dir associated: audio/validation)
+                - eval_dcase2018.tsv    (audio_dir associated: audio/validation)
             -eval
-                - public.tsv            (will search filename in audio/eval/public)
+                - public.tsv            (audio_dir associated: audio/eval/public)
         - audio
             - train
                 - weak
@@ -80,12 +80,23 @@ class DESED:
 
     """
     def __init__(self, base_feature_dir="features", recompute_features=False, compute_log=True):
+        # Parameters, they're kept if we need to reproduce the dataset
+        self.sample_rate = cfg.sample_rate
+        self.n_window = cfg.n_window
+        self.hop_size = cfg.hop_size
+        self.n_mels = cfg.n_mels
+        self.mel_min_max_freq = (cfg.mel_f_min, cfg.mel_f_max)
 
+        # Defined parameters
         self.recompute_features = recompute_features
         self.compute_log = compute_log
 
-        feature_dir = osp.join(base_feature_dir, "sr" + str(cfg.sample_rate) + "_win" + str(cfg.n_window)
-                               + "_hop" + str(cfg.hop_length) + "_mels" + str(cfg.n_mels))
+        # Feature dir to not have the same name with different parameters
+        ext_freq = ''
+        if self.mel_min_max_freq != (0, self.sample_rate / 2):
+            ext_freq = f"_{'_'.join(self.mel_min_max_freq)}"
+        feature_dir = osp.join(base_feature_dir, f"sr{self.sample_rate}_win{self.n_window}_hop{self.hop_size}"
+                                                 f"_mels{self.n_mels}{ext_freq}")
         if not self.compute_log:
             feature_dir += "_nolog"
 
@@ -96,19 +107,39 @@ class DESED:
         os.makedirs(self.meta_feat_dir, exist_ok=True)
 
     def state_dict(self):
+        """ get the important parameters to save for the class
+        Returns:
+            dict
+        """
         parameters = {
             "feature_dir": self.feature_dir,
             "meta_feat_dir": self.meta_feat_dir,
-            "compute_log": self.compute_log
+            "compute_log": self.compute_log,
+            "sample_rate": self.sample_rate,
+            "n_window": self.n_window,
+            "hop_size": self.hop_size,
+            "n_mels": self.n_mels,
+            "mel_min_max_freq": self.mel_min_max_freq
         }
         return parameters
 
     @classmethod
     def load_state_dict(cls, state_dict):
+        """ load the dataset from previously saved parameters
+        Args:
+            state_dict: dict, parameter saved with state_dict function
+        Returns:
+            DESED class object with the right parameters
+        """
         desed_obj = cls()
         desed_obj.feature_dir = state_dict["feature_dir"]
         desed_obj.meta_feat_dir = state_dict["meta_feat_dir"]
         desed_obj.compute_log = state_dict["compute_log"]
+        desed_obj.sample_rate = state_dict["sample_rate"]
+        desed_obj.n_window = state_dict["n_window"]
+        desed_obj.hop_size = state_dict["hop_size"]
+        desed_obj.n_mels = state_dict["n_mels"]
+        desed_obj.mel_min_max_freq = state_dict["mel_min_max_freq"]
         return desed_obj
 
     def initialize_and_get_df(self, tsv_path, audio_dir=None, audio_dir_ss=None, pattern_ss=None,
@@ -160,13 +191,14 @@ class DESED:
         features_tsv = osp.join(meta_feat_dir, feat_fname)
 
         # if not osp.exists(features_tsv):
-        logger.info(f"Computing features ...")
+        t = time.time()
+        logger.info(f"Getting features ...")
         df_features = self.extract_features_from_df(df_meta, audio_dir, feature_dir,
                                                     audio_dir_ss, pattern_ss,
                                                     ext_ss_feature_file)
         if len(df_features) != 0:
             df_features.to_csv(features_tsv, sep="\t", index=False)
-            logger.info(f"metadata created: {features_tsv}")
+            logger.info(f"metadata created: {features_tsv} \n in {time.time() - t}s")
         else:
             raise IndexError(f"Empty features DataFrames {features_tsv}")
         # else:
@@ -174,8 +206,7 @@ class DESED:
         #     df_features = pd.read_csv(features_tsv, sep="\t")
         return df_features
 
-    @staticmethod
-    def calculate_mel_spec(audio, compute_log=False):
+    def calculate_mel_spec(self, audio, compute_log=False):
         """
         Calculate a mal spectrogram from raw audio waveform
         Note: The parameters of the spectrograms are in the config.py file.
@@ -187,12 +218,12 @@ class DESED:
             containing the mel spectrogram
         """
         # Compute spectrogram
-        ham_win = np.hamming(cfg.n_window)
+        ham_win = np.hamming(self.n_window)
 
         spec = librosa.stft(
             audio,
-            n_fft=cfg.n_window,
-            hop_length=cfg.hop_length,
+            n_fft=self.n_window,
+            hop_length=self.hop_size,
             window=ham_win,
             center=True,
             pad_mode='reflect'
@@ -200,9 +231,9 @@ class DESED:
 
         mel_spec = librosa.feature.melspectrogram(
             S=np.abs(spec),  # amplitude, for energy: spec**2 but don't forget to change amplitude_to_db.
-            sr=cfg.sample_rate,
-            n_mels=cfg.n_mels,
-            fmin=cfg.f_min, fmax=cfg.f_max,
+            sr=self.sample_rate,
+            n_mels=self.n_mels,
+            fmin=self.mel_min_max_freq[0], fmax=self.mel_min_max_freq[1],
             htk=False, norm=None)
 
         if compute_log:
@@ -212,7 +243,7 @@ class DESED:
         return mel_spec
 
     def load_and_compute_mel_spec(self, wav_path):
-        (audio, _) = read_audio(wav_path, cfg.sample_rate)
+        (audio, _) = read_audio(wav_path, self.sample_rate)
         if audio.shape[0] == 0:
             raise IOError("File {wav_path} is corrupted!")
         else:

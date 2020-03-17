@@ -19,7 +19,6 @@ import pandas as pd
 import numpy as np
 
 import torch
-from desed.utils import create_folder
 from torch.utils.data import DataLoader
 from torch import nn
 
@@ -33,8 +32,7 @@ from utilities import ramps
 from utilities.Logger import create_logger
 from utilities.Scaler import ScalerPerAudio, Scaler
 from utilities.utils import ManyHotEncoder, SaveBest, to_cuda_if_available, weights_init, \
-    get_transforms, AverageMeterSet, generate_tsv_wav_durations, meta_path_to_audio_dir, audio_dir_to_meta_path, \
-    generate_tsv_from_isolated_events, EarlyStopping
+    get_transforms, AverageMeterSet, generate_tsv_wav_durations, meta_path_to_audio_dir, EarlyStopping
 
 
 def adjust_learning_rate(optimizer, rampup_value, rampdown_value=1):
@@ -76,21 +74,20 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
     :param weak_mask: mask the batch to get only the weak labeled data (used to calculate the loss)
     :param strong_mask: mask the batch to get only the strong labeled data (used to calcultate the loss)
     """
-    logger = create_logger(__name__ + "/" + inspect.currentframe().f_code.co_name, terminal_level=cfg.terminal_level)
+    log = create_logger(__name__ + "/" + inspect.currentframe().f_code.co_name, terminal_level=cfg.terminal_level)
     class_criterion = nn.BCELoss()
     consistency_criterion = nn.MSELoss()
     class_criterion, consistency_criterion = to_cuda_if_available(class_criterion, consistency_criterion)
 
     meters = AverageMeterSet()
 
-    logger.debug("Nb batches: {}".format(len(train_loader)))
+    log.debug("Nb batches: {}".format(len(train_loader)))
     start = time.time()
 
-    # rampup_value = ramps.exp_rampup(epoch, cfg.n_epoch_rampup)
     for i, ((batch_input, ema_batch_input), target) in enumerate(train_loader):
         global_step = epoch * len(train_loader) + i
         rampup_value = ramps.exp_rampup(global_step, cfg.n_epoch_rampup*len(train_loader))
-        # Todo check if this improves the performance
+
         if adjust_lr:
             adjust_learning_rate(optimizer, rampup_value)
         meters.update('lr', optimizer.param_groups[0]['lr'])
@@ -111,13 +108,13 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
             ema_class_loss = class_criterion(weak_pred_ema[weak_mask], target_weak[weak_mask])
 
             if i == 0:
-                logger.debug(f"target: {target.mean(-2)}")
-                logger.debug(f"Target_weak: {target_weak}")
-                logger.debug(f"Target_weak mask: {target_weak[weak_mask]}")
-                logger.debug(f"Target strong mask: {target[strong_mask]}")
-                logger.debug(weak_class_loss)
-                logger.debug(f"rampup_value: {rampup_value}")
-                logger.debug(f"tensor mean: {batch_input.mean()}")
+                log.debug(f"target: {target.mean(-2)}")
+                log.debug(f"Target_weak: {target_weak}")
+                log.debug(f"Target_weak mask: {target_weak[weak_mask]}")
+                log.debug(f"Target strong mask: {target[strong_mask].sum(-2)}")
+                log.debug(weak_class_loss)
+                log.debug(f"rampup_value: {rampup_value}")
+                log.debug(f"tensor mean: {batch_input.mean()}")
             meters.update('weak_class_loss', weak_class_loss.item())
 
             meters.update('Weak EMA loss', ema_class_loss.item())
@@ -173,7 +170,7 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
 
     epoch_time = time.time() - start
 
-    logger.info(
+    log.info(
         'Epoch: {}\t'
         'Time {:.2f}\t'
         '{meters}'.format(
@@ -181,7 +178,7 @@ def train(train_loader, model, optimizer, epoch, ema_model=None, weak_mask=None,
     return loss
 
 
-def get_dfs(desed_dataset, reduced_nb_data, separated_sources=False):
+def get_dfs(desed_dataset, nb_files=None, separated_sources=False):
     if separated_sources:
         audio_weak_ss = cfg.weak_ss
         audio_unlabel_ss = cfg.unlabel_ss
@@ -195,16 +192,14 @@ def get_dfs(desed_dataset, reduced_nb_data, separated_sources=False):
 
     logger = create_logger(__name__ + "/" + inspect.currentframe().f_code.co_name, terminal_level=cfg.terminal_level)
 
-    weak_df = desed_dataset.initialize_and_get_df(cfg.weak, audio_dir_ss=audio_weak_ss,
-                                                  nb_files=reduced_nb_data)
-    unlabel_df = desed_dataset.initialize_and_get_df(cfg.unlabel, audio_dir_ss=audio_unlabel_ss,
-                                                     nb_files=reduced_nb_data)
+    weak_df = desed_dataset.initialize_and_get_df(cfg.weak, audio_dir_ss=audio_weak_ss, nb_files=nb_files)
+    unlabel_df = desed_dataset.initialize_and_get_df(cfg.unlabel, audio_dir_ss=audio_unlabel_ss, nb_files=nb_files)
     # Event if synthetic not used for training, used on validation purpose
     synthetic_df = desed_dataset.initialize_and_get_df(cfg.synthetic, audio_dir_ss=audio_synthetic_ss,
-                                                       nb_files=reduced_nb_data, download=False)
+                                                       nb_files=nb_files, download=False)
     logger.debug(f"synthetic: {synthetic_df.head()}")
     validation_df = desed_dataset.initialize_and_get_df(cfg.validation, audio_dir=cfg.audio_validation_dir,
-                                                        audio_dir_ss=audio_validation_ss, nb_files=reduced_nb_data)
+                                                        audio_dir_ss=audio_validation_ss, nb_files=nb_files)
 
     # Divide weak in train and valid
     train_weak_df = weak_df.sample(frac=0.8, random_state=26)
@@ -219,8 +214,8 @@ def get_dfs(desed_dataset, reduced_nb_data, separated_sources=False):
 
     # Put train_synth in frames so many_hot_encoder can work.
     #  Not doing it for valid, because not using labels (when prediction) and event based metric expect sec.
-    train_synth_df.onset = train_synth_df.onset * cfg.sample_rate // cfg.hop_length // pooling_time_ratio
-    train_synth_df.offset = train_synth_df.offset * cfg.sample_rate // cfg.hop_length // pooling_time_ratio
+    train_synth_df.onset = train_synth_df.onset * cfg.sample_rate // cfg.hop_size // pooling_time_ratio
+    train_synth_df.offset = train_synth_df.offset * cfg.sample_rate // cfg.hop_size // pooling_time_ratio
     logger.debug(valid_synth_df.event_label.value_counts())
 
     # Eval 2018 to report results
@@ -301,7 +296,7 @@ if __name__ == '__main__':
     #                "pooling": list(3 * ((2, 4),))}
     # pooling_time_ratio = 8  # 2 * 2 * 2
 
-    out_nb_frames_1s = cfg.sample_rate / cfg.hop_length / pooling_time_ratio
+    out_nb_frames_1s = cfg.sample_rate / cfg.hop_size / pooling_time_ratio
     median_window = max(int(cfg.median_window_s * out_nb_frames_1s), 1)
     logger.debug(f"median_window: {median_window}")
     # ##############
@@ -343,13 +338,13 @@ if __name__ == '__main__':
         scaler_args = [cfg.scale_peraudio_on, cfg.scale_peraudio_type]
         scaler = ScalerPerAudio(*scaler_args)
 
-    transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv=add_axis_conv, augment_type="noise")
+    transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv=add_axis_conv, noise={"snr": 24})
     transforms_valid = get_transforms(cfg.max_frames, scaler=scaler, add_axis_conv=add_axis_conv)
 
     train_weak_data = DataLoadDf(dfs["train_weak"], many_hot_encoder.encode_strong_df, transform=transforms,
                                  in_memory=cfg.in_memory)
     unlabel_data = DataLoadDf(dfs["unlabel"], many_hot_encoder.encode_strong_df, transform=transforms,
-                              in_memory=cfg.in_memory)
+                              in_memory=False)
     train_synth_data = DataLoadDf(dfs["train_synthetic"], many_hot_encoder.encode_strong_df, transform=transforms,
                                   in_memory=cfg.in_memory)
 
@@ -424,7 +419,8 @@ if __name__ == '__main__':
 
     save_best_cb = SaveBest("sup")
     if cfg.early_stopping is not None:
-        early_stopping_call = EarlyStopping(patience=cfg.early_stopping, val_comp="sup")
+        early_stopping_call = EarlyStopping(patience=cfg.early_stopping, val_comp="sup",
+                                            init_patience=cfg.es_init_wait)
 
     # ##############
     # Train
@@ -433,17 +429,16 @@ if __name__ == '__main__':
     for epoch in range(cfg.n_epoch):
         crnn = crnn.train()
         crnn_ema = crnn_ema.train()
-
         crnn, crnn_ema = to_cuda_if_available(crnn, crnn_ema)
 
         loss = train(training_data, crnn, optimizer, epoch,
                      ema_model=crnn_ema, weak_mask=weak_mask, strong_mask=strong_mask, adjust_lr=cfg.adjust_lr)
 
+        # Validation
         crnn = crnn.eval()
         logger.info("\n ### Valid synthetic metric ### \n")
         predictions = get_predictions(crnn, valid_synth_dataloader, many_hot_encoder.decode_strong, pooling_time_ratio,
-                                      median_window=median_window,
-                                      save_predictions=None)
+                                      median_window=median_window, save_predictions=None)
         # Validation with synthetic data (dropping feature_filename for psds)
         valid_synth = dfs["valid_synthetic"].drop("feature_filename", axis=1)
         valid_events_metric = compute_sed_eval_metrics(predictions, valid_synth)
@@ -500,24 +495,25 @@ if __name__ == '__main__':
     # ##############
     # Validation
     # ##############
-    transforms_valid = get_transforms(cfg.max_frames, scaler, add_axis_conv=add_axis_conv)
-    predicitons_fname = os.path.join(saved_pred_dir, "baseline_validation.tsv")
-    predicitons_fname18 = os.path.join(saved_pred_dir, "baseline_eval18.tsv")
+    with torch.no_grad():
+        transforms_valid = get_transforms(cfg.max_frames, scaler, add_axis_conv=add_axis_conv)
+        predicitons_fname = os.path.join(saved_pred_dir, "baseline_validation.tsv")
+        predicitons_fname18 = os.path.join(saved_pred_dir, "baseline_eval18.tsv")
 
-    validation_data = DataLoadDf(dfs["validation"], many_hot_encoder.encode_strong_df,
+        validation_data = DataLoadDf(dfs["validation"], many_hot_encoder.encode_strong_df,
+                                     transform=transforms_valid, return_indexes=True)
+        eval18_data = DataLoadDf(dfs["eval2018"], many_hot_encoder.encode_strong_df,
                                  transform=transforms_valid, return_indexes=True)
-    eval18_data = DataLoadDf(dfs["eval2018"], many_hot_encoder.encode_strong_df,
-                             transform=transforms_valid, return_indexes=True)
 
-    validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
-    valid_predictions = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
-                                        pooling_time_ratio, median_window=median_window,
-                                        save_predictions=predicitons_fname)
-    compute_sed_eval_metrics(valid_predictions, dfs["validation"])
+        validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
+        valid_predictions = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
+                                            pooling_time_ratio, median_window=median_window,
+                                            save_predictions=predicitons_fname)
+        compute_sed_eval_metrics(valid_predictions, dfs["validation"])
 
-    # Eval 2018
-    eval18_dataloader = DataLoader(eval18_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
-    eval18_predictions = get_predictions(crnn, eval18_dataloader, many_hot_encoder.decode_strong,
-                                         pooling_time_ratio, median_window=median_window,
-                                         save_predictions=predicitons_fname18)
-    compute_sed_eval_metrics(eval18_predictions, dfs["eval2018"])
+        # Eval 2018
+        eval18_dataloader = DataLoader(eval18_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
+        eval18_predictions = get_predictions(crnn, eval18_dataloader, many_hot_encoder.decode_strong,
+                                             pooling_time_ratio, median_window=median_window,
+                                             save_predictions=predicitons_fname18)
+        compute_sed_eval_metrics(eval18_predictions, dfs["eval2018"])
