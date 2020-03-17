@@ -165,7 +165,7 @@ class AugmentGaussianNoise(Transform):
             feat_used = features[0]
         else:
             feat_used = features
-        std = np.mean((feat_used ** 2) * (10 ** (-snr / 10)), axis=-2)
+        std = np.sqrt(np.mean((feat_used ** 2) * (10 ** (-snr / 10)), axis=-2))
         try:
             noise = np.random.normal(0, std, features.shape)
         except Exception as e:
