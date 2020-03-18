@@ -6,8 +6,9 @@
 [Turpault et al.][paper2019-description], [Serizel et al.][paper2019-eval] 
 
 ## Updates
-- 7th March 2020: update the `DESED_synth_dcase20_train_jams.tar`on [DESED_synthetic][synthetic_dataset]
 - 9th March 2020: update `scripts` to get the recorded data in the download.
+- 18th March 2020: update the `DESED_synth_dcase20_train_jams.tar`on [DESED_synthetic][synthetic_dataset] 
+and comment reverb since we do not use it for the baseline.
 
 ## Dependencies
 

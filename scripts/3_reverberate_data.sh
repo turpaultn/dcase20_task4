@@ -25,6 +25,6 @@ SCRIPTS_PATH=../data_generation
 ######## Under this line you should not have to change anything ###########
 
 # Reverberate data using same RIR as Google baseline
-python ${SCRIPTS_PATH}/reverberate_data.py --rir_folder=${RIR} --input_folder=${INPUT_PATH} --reverb_out_folder=${REVERB_PATH} \
---rir_subset=${SUBSET} --mix_info_file=${MIX_INFO}  --src_list_file=${SRC_LIST} --rir_list_file=${RIR_LIST} \
---nproc=${NPROC}
+python ${SCRIPTS_PATH}/reverberate_data.py --rir_folder=${RIR} --input_folder=${INPUT_PATH} \
+--reverb_out_folder=${REVERB_PATH} --rir_subset=${SUBSET} --mix_info_file=${MIX_INFO}  --src_list_file=${SRC_LIST} \
+--rir_list_file=${RIR_LIST} \--nproc=${NPROC}

@@ -13,10 +13,10 @@ The scripts defines the different steps to download the data.
 	- You download the Jams from 2020 on the DESED dataset
 	- You recreate the files thanks by launching the same parameters (random_seed, n_jobs)
 
-- 3- Reverberate the synthetic data generated in 2) thanks to [FUSS] RIRs.
+- 3- (NOT USED FOR THE BASELINE) Reverberate the synthetic data generated in 2) thanks to [FUSS] RIRs.
 Reverberated data are used to train the baseline not using Source separation.
 
-- 4- Apply the FUSS baseline model on the reverberated data + recorded soundscapes from DESED.
+- 4- Apply the FUSS baseline model on the synthetic soundscapes + recorded soundscapes from DESED.
 These data are used to train the baseline using Source separation.
 
 
