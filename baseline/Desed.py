@@ -198,7 +198,7 @@ class DESED:
                                                     ext_ss_feature_file)
         if len(df_features) != 0:
             df_features.to_csv(features_tsv, sep="\t", index=False)
-            logger.info(f"metadata created: {features_tsv} \n in {time.time() - t}s")
+            logger.info(f"features created in {time.time() - t:.2f}s, metadata: {features_tsv}")
         else:
             raise IndexError(f"Empty features DataFrames {features_tsv}")
         # else:

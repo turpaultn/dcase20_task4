@@ -7,7 +7,7 @@ workspace = ".."
 # DESED Paths
 weak = os.path.join(workspace, 'dataset/metadata/train/weak.tsv')
 unlabel = os.path.join(workspace, 'dataset/metadata/train/unlabel_in_domain.tsv')
-synthetic = os.path.join(workspace, 'dataset/metadata/train/synthetic20_pitch/soundscapes.tsv')
+synthetic = os.path.join(workspace, 'dataset/metadata/train/synthetic20/soundscapes.tsv')
 validation = os.path.join(workspace, 'dataset/metadata/validation/validation.tsv')
 test2018 = os.path.join(workspace, 'dataset/metadata/validation/test_dcase2018.tsv')
 eval2018 = os.path.join(workspace, 'dataset/metadata/validation/eval_dcase2018.tsv')
@@ -19,7 +19,7 @@ audio_validation_dir = os.path.join(workspace, 'dataset/audio/validation')
 ## Separated data
 weak_ss = os.path.join(workspace, 'dataset/audio/train/weak_ss/separated_sources')
 unlabel_ss = os.path.join(workspace, 'dataset/audio/train/unlabel_in_domain_ss/separated_sources')
-synthetic_ss = os.path.join(workspace, 'dataset/audio/train/synthetic20_pitch/separated_sources')
+synthetic_ss = os.path.join(workspace, 'dataset/audio/train/synthetic20/separated_sources')
 validation_ss = os.path.join(workspace, 'dataset/audio/validation_ss/separated_sources')
 eval_desed_ss = os.path.join(workspace, "dataset/audio/eval/public_ss/separated_sources")
 
@@ -45,8 +45,12 @@ max_consistency_cost = 2
 
 # Training
 in_memory = True
+in_memory_unlab = False
 num_workers = 12
 batch_size = 24
+
+noise_snr = 30
+
 # Todo, reput as normal
 import torch
 if torch.cuda.is_available():
@@ -61,7 +65,7 @@ save_best = True
 early_stopping = 10
 es_init_wait = 50
 
-adjust_lr = False
+adjust_lr = True
 max_learning_rate = 0.001
 
 default_learning_rate = 0.001

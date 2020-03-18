@@ -12,19 +12,16 @@ import torch
 from torch.utils.data import DataLoader
 import pandas as pd
 
-from DataLoad import DataLoadDf, DataLoadDfSS
+from DataLoad import DataLoadDf
 from Desed import DESED
 from evaluation_measures import compute_sed_eval_metrics, get_predictions, \
     psds_results
-from utilities.utils import ManyHotEncoder, to_cuda_if_available, get_transforms, generate_tsv_from_isolated_events, \
-    generate_tsv_wav_durations, meta_path_to_audio_dir
+from utilities.utils import ManyHotEncoder, to_cuda_if_available, get_transforms, generate_tsv_wav_durations, \
+    meta_path_to_audio_dir
 from utilities.Logger import create_logger
 from utilities.Scaler import Scaler, ScalerPerAudio
 from models.CRNN import CRNN
 import config as cfg
-
-from desed.post_process import post_process_df_labels
-
 
 logger = create_logger(__name__)
 
@@ -37,6 +34,7 @@ def _load_crnn(state):
     crnn.eval()
     crnn = to_cuda_if_available(crnn)
     logger.info("Model loaded at epoch: {}".format(state["epoch"]))
+    logger.info(crnn)
     return crnn
 
 
@@ -53,46 +51,37 @@ def _load_scaler(state):
     return scaler
 
 
-def _get_predictions(state, strong_dataloader_ind, median_window=None, save_preds_path=None):
+def _get_predictions(state, strong_dataloader_ind, median_win=None, save_preds_path=None):
     pooling_time_ratio = state["pooling_time_ratio"]
     many_hot_encoder = ManyHotEncoder.load_state_dict(state["many_hot_encoder"])
-    if median_window is None:
-        median_window = state["median_window"]
+    if median_win is None:
+        median_win = state["median_window"]
     crnn = _load_crnn(state)
 
     predictions = get_predictions(crnn, strong_dataloader_ind, many_hot_encoder.decode_strong, pooling_time_ratio,
-                                  median_window=median_window, save_predictions=save_preds_path)
+                                  median_window=median_win, save_predictions=save_preds_path)
     return predictions
 
 
-def test_model(state, gtruth_df, save_preds_path=None, median_window=None, add_axis_conv=True):
-    if save_preds_path is not None and os.path.exists(save_preds_path):
-        warnings.warn(f"Predictions are not computing since {save_preds_path} already exists")
-        predictions = pd.read_csv(save_preds_path, sep="\t")
-    else:
-        pred_df = gtruth_df.copy()
-        ### Define dataloader
-        many_hot_encoder = ManyHotEncoder.load_state_dict(state["many_hot_encoder"])
-        scaler = _load_scaler(state)
-        transforms_valid = get_transforms(cfg.max_frames, scaler=scaler, add_axis_conv=add_axis_conv)
+def test_model(state, gtruth_df, save_preds_path=None, median_win=None, add_axis_conv=True):
+    # if save_preds_path is not None and os.path.exists(save_preds_path):
+    #     warnings.warn(f"Predictions are not computing since {save_preds_path} already exists")
+    #     predictions = pd.read_csv(save_preds_path, sep="\t")
+    # else:
+    pred_df = gtruth_df.copy()
+    # Define dataloader
+    many_hot_encoder = ManyHotEncoder.load_state_dict(state["many_hot_encoder"])
+    scaler = _load_scaler(state)
+    transforms_valid = get_transforms(cfg.max_frames, scaler=scaler, add_axis_conv=add_axis_conv)
 
-        strong_dataload = DataLoadDf(pred_df, many_hot_encoder.encode_strong_df,
-                                     transform=transforms_valid, return_indexes=True)
-        strong_dataloader_ind = DataLoader(strong_dataload, batch_size=cfg.batch_size, drop_last=False)
+    strong_dataload = DataLoadDf(pred_df, many_hot_encoder.encode_strong_df,
+                                 transform=transforms_valid, return_indexes=True)
+    strong_dataloader_ind = DataLoader(strong_dataload, batch_size=cfg.batch_size, drop_last=False)
 
-        predictions = _get_predictions(state, strong_dataloader_ind, median_window=median_window,
-                                       save_preds_path=save_preds_path)
+    predictions = _get_predictions(state, strong_dataloader_ind, median_win=median_win,
+                                   save_preds_path=save_preds_path)
 
     compute_sed_eval_metrics(predictions, gtruth_df)
-
-    # weak_dataload = DataLoadDf(df, dataset.get_feature_file, many_hot_encoder.encode_weak,
-    #                            transform=transforms_valid)
-    # weak_metric = get_f_measure_by_class(crnn, len(cfg.classes), DataLoader(weak_dataload, batch_size=cfg.batch_size))
-    # logger.info("Weak F1-score per class: \n {}".format(pd.DataFrame(weak_metric * 100, many_hot_encoder.labels)))
-    # logger.info("Weak F1-score macro averaged: {}".format(np.mean(weak_metric)))
-
-    # Just an example of how to get the weak predictions from dataframes.
-    # print(audio_tagging_results(df, predictions))
     return predictions
 
 
@@ -155,21 +144,19 @@ if __name__ == '__main__':
         groundtruth_df = dataset.initialize_and_get_df(f_args.groundtruth_tsv, gt_audio_dir, f_args.base_dir_ss,
                                                        pattern_ss="_events", nb_files=f_args.nb_files)
 
-        logger.info("\n #### Separated sources ####")
+        logger.info("\n #### Separated sources #### \n")
         pred_ss = test_model(expe_state, groundtruth_df, save_preds_path=f_args.save_predictions_path,
-                             median_window=median_window, add_axis_conv=False)
+                             median_win=median_window, add_axis_conv=False)
         psds_results(
             predictions=pred_ss,
             gtruth_df=groundtruth_df.drop("feature_filename", axis=1),
             gtruth_durations=meta_df
         )
-        logger.info("\n #### Combination of original and separated sources ####")
-
     else:
         groundtruth_df = dataset.initialize_and_get_df(f_args.groundtruth_tsv, gt_audio_dir, nb_files=f_args.nb_files)
-        logger.info("\n #### Original files ####")
+        logger.info("\n #### Original files #### \n")
         pred_mixt = test_model(expe_state, groundtruth_df, save_preds_path=f_args.save_predictions_path,
-                               median_window=median_window)
+                               median_win=median_window)
 
         psds_results(
             predictions=pred_mixt,

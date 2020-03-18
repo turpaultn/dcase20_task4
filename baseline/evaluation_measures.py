@@ -246,20 +246,23 @@ def get_predictions(model, valid_dataloader, decoder, pooling_time_ratio=1, medi
 
 
 def psds_results(predictions, gtruth_df, gtruth_durations):
-    dtc_threshold = 0.5
-    gtc_threshold = 0.5
-    cttc_threshold = 0.3
-    # Instantiate PSDSEval
-    psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold,
-                    ground_truth=gtruth_df, metadata=gtruth_durations)
+    try:
+        dtc_threshold = 0.5
+        gtc_threshold = 0.5
+        cttc_threshold = 0.3
+        # Instantiate PSDSEval
+        psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold,
+                        ground_truth=gtruth_df, metadata=gtruth_durations)
 
-    psds.add_operating_point(predictions)
-    psds_score = psds.psds(alpha_ct=0, alpha_st=0, max_efpr=100)
-    print(f"\nPSD-Score (0, 0, 100): {psds_score.value:.5f}")
-    psds_score = psds.psds(alpha_ct=1, alpha_st=0, max_efpr=100)
-    print(f"\nPSD-Score (1, 0, 100): {psds_score.value:.5f}")
-    psds_score = psds.psds(alpha_ct=0, alpha_st=1, max_efpr=100)
-    print(f"\nPSD-Score (0, 1, 100): {psds_score.value:.5f}")
+        psds.add_operating_point(predictions)
+        psds_score = psds.psds(alpha_ct=0, alpha_st=0, max_efpr=100)
+        print(f"\nPSD-Score (0, 0, 100): {psds_score.value:.5f}")
+        psds_score = psds.psds(alpha_ct=1, alpha_st=0, max_efpr=100)
+        print(f"\nPSD-Score (1, 0, 100): {psds_score.value:.5f}")
+        psds_score = psds.psds(alpha_ct=0, alpha_st=1, max_efpr=100)
+        print(f"\nPSD-Score (0, 1, 100): {psds_score.value:.5f}")
+    except psds_eval.psds.PSDSEvalError as e:
+        logger.error("psds did not work ....")
 
 
 def compute_sed_eval_metrics(predictions, groundtruth):
