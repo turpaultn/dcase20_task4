@@ -8,8 +8,6 @@
 from __future__ import print_function
 
 import glob
-import warnings
-
 import numpy as np
 import os
 import os.path as osp
@@ -172,7 +170,7 @@ class DESED:
         os.makedirs(feature_dir, exist_ok=True)
 
         df_meta = self.get_df_from_meta(tsv_path, nb_files, pattern_ss=pattern_ss)
-        logger.info("{} Total file number: {}".format(tsv_path, len(df_meta.filename.unique())))
+        logger.info(f"{tsv_path} Total file number: {len(df_meta.filename.unique())}")
 
         # Download real data
         if download:
@@ -249,7 +247,7 @@ class DESED:
         else:
             t1 = time.time()
             mel_spec = self.calculate_mel_spec(audio, self.compute_log)
-            logger.debug("compute features time: %s" % (time.time() - t1))
+            logger.debug(f"compute features time: {time.time() - t1}")
         return mel_spec
 
     def _extract_features(self, wav_path, out_path):
@@ -356,7 +354,7 @@ class DESED:
                 filenames_kept = filenames.sort_values().sample(nb_files, random_state=10)
                 df_kept = df[df[column].isin(filenames_kept)].reset_index(drop=True)
 
-            logger.debug("Taking subpart of the data, len : {}, df_len: {}".format(nb_files, len(df)))
+            logger.debug(f"Taking subpart of the data, len : {nb_files}, df_len: {len(df)}")
         else:
             df_kept = df
         return df_kept
