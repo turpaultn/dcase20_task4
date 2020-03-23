@@ -4,6 +4,8 @@ import librosa
 import numpy as np
 import torch
 
+from DataLoad import Compose
+
 
 class Transform:
     def transform_data(self, data):
@@ -144,7 +146,7 @@ class AugmentGaussianNoise(Transform):
                std: float, std of the Gaussian noise to add
            """
 
-    def __init__(self, mean=0, std=None, snr=None):
+    def __init__(self, mean=0., std=None, snr=None):
         self.mean = mean
         self.std = std
         self.snr = snr
@@ -243,3 +245,57 @@ class Normalize(Transform):
                 The transformed data
         """
         return self.scaler.normalize(data)
+
+
+class CombineChannels(Transform):
+    """ Combine channels when using source separation (to remove the channels with low intensity)
+       Args:
+           combine_on: str, in {"max", "min"}, the channel in which to combine the channels with the smallest energy
+           n_channel_mix: int, the number of lowest energy channel to combine in another one
+   """
+
+    def __init__(self, combine_on="max", n_channel_mix=2):
+        self.combine_on = combine_on
+        self.n_channel_mix = n_channel_mix
+
+    def transform_data(self, data):
+        """ Apply the transformation on data
+            Args:
+                data: np.array, the data to be modified, assuming the first values are the mixture,
+                    and the other channels the sources
+
+            Returns:
+                np.array
+                The transformed data
+        """
+        mix = data[:1]  # :1 is just to keep the first axis
+        sources = data[1:]
+        channels_en = (sources ** 2).sum(-1).sum(-1)  # Get the energy per channel
+        indexes_sorted = channels_en.argsort()
+        sources_to_add = sources[indexes_sorted[:2]].sum(0)
+        if self.combine_on == "min":
+            sources[indexes_sorted[2]] += sources_to_add
+        elif self.combine_on == "max":
+            sources[indexes_sorted[-1]] += sources_to_add
+        return np.concatenate((mix, sources[indexes_sorted[2:]]))
+
+
+def get_transforms(frames, scaler=None, add_axis_conv=True, noise_dict_params=None, combine_channels_args=None):
+    transf = []
+    unsqueeze_axis = None
+    if add_axis_conv:
+        unsqueeze_axis = 0
+
+    if combine_channels_args is not None:
+        transf.append(CombineChannels(*combine_channels_args))
+
+    # Todo, add other augmentations
+    if noise_dict_params is not None:
+        transf.append(AugmentGaussianNoise(mean=0., **noise_dict_params))
+        # transf.append(AugmentGaussianNoise(mean=0., std=0.5))
+
+    transf.extend([ApplyLog(), PadOrTrunc(nb_frames=frames), ToTensor(unsqueeze_axis=unsqueeze_axis)])
+    if scaler is not None:
+        transf.append(Normalize(scaler=scaler))
+
+    return Compose(transf)

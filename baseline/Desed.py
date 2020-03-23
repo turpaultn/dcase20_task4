@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-#########################################################################
-# Initial software
-# Copyright Nicolas Turpault, Romain Serizel, Justin Salamon, Ankit Parag Shah, 2020, v1.0
-# This software is distributed under the terms of the License MIT
-#########################################################################
-
 from __future__ import print_function
 
 import glob
@@ -14,9 +8,9 @@ import os.path as osp
 import librosa
 import time
 import pandas as pd
+import desed
 
 import config as cfg
-from desed.download_real import download
 from utilities.Logger import create_logger
 from utilities.utils import read_audio, meta_path_to_audio_dir
 
@@ -163,6 +157,7 @@ class DESED:
         if audio_dir is None:
             audio_dir = meta_path_to_audio_dir(tsv_path)
         # Path to save features, subdir, otherwise could have duplicate paths for synthetic data
+        audio_dir = audio_dir[:-1] if audio_dir.endswith(osp.sep) else audio_dir
         subdir = osp.sep.join(audio_dir.split(osp.sep)[-2:])
         meta_feat_dir = osp.join(self.meta_feat_dir, subdir)
         feature_dir = osp.join(self.feature_dir, subdir)
@@ -210,6 +205,7 @@ class DESED:
         Note: The parameters of the spectrograms are in the config.py file.
         Args:
             audio : numpy.array, raw waveform to compute the spectrogram
+            compute_log: bool, whether to get the output in dB (log scale) or not
 
         Returns:
             numpy.array
@@ -278,9 +274,13 @@ class DESED:
         Args:
             df_meta : pd.DataFrame, containing at least column "filename" with name of the wav to compute features
             audio_dir: str, the path where to find the wav files specified by the dataframe
+            feature_dir: str, the path where to search and save the features.
             audio_dir_ss: str, the path where to find the separated files (associated to the mixture)
             pattern_ss: str, the pattern following the normal filename to match the folder to find separated sources
             ext_ss_feature_file: str, only when audio_dir_ss is not None
+
+        Returns:
+            pd.DataFrame containing the initial meta + column with the "feature_filename"
         """
         if bool(audio_dir_ss) != bool(pattern_ss):
             raise NotImplementedError("if audio_dir_ss is not None, you must specify a pattern_ss")
@@ -290,7 +290,8 @@ class DESED:
         uniq_fpaths = fpaths.drop_duplicates()
 
         for ind, filename in enumerate(uniq_fpaths):
-            if ind % 500 == 0: logger.debug(ind)
+            if ind % 500 == 0:
+                logger.debug(ind)
 
             wav_path = osp.join(audio_dir, filename)
             if not osp.isfile(wav_path):
@@ -306,7 +307,7 @@ class DESED:
                     # To be changed if you have new separated sounds from the same mixture
                     out_filename = osp.join(osp.splitext(filename)[0] + ext_ss_feature_file + ".npy")
                     out_path = osp.join(feature_dir, out_filename)
-                    bname, ext =  osp.splitext(filename)
+                    bname, ext = osp.splitext(filename)
                     wav_paths_ss = glob.glob(osp.join(audio_dir_ss, bname + pattern_ss, "*" + ext))
                     self._extract_features_ss(wav_path, wav_paths_ss, out_path)
                 row_features = df_meta[df_meta.filename == filename]
@@ -337,7 +338,7 @@ class DESED:
             nb_files: int, the number of file to take in the dataframe if taking a small part of the dataset.
             pattern_ss: str, if nb_files is not None, the pattern is needed to get same ss than soundscapes
         Returns:
-            dataframe
+            pd.DataFrame containing the only the number of files specified
         """
         column = "filename"
         if not nb_files > len(df[column].unique()):
@@ -384,8 +385,7 @@ class DESED:
         Args:
             filenames: list or pd.Series, filenames of files to be downloaded ()
             audio_dir: str, the directory where the wav file should be downloaded (if not exist)
-            nb_files: int, the number of files to use, if a subpart of the dataframe wanted.
             chunk_size: int, (Default value = 10) number of files to download in a chunk
             n_jobs : int, (Default value = 3) number of parallel jobs
         """
-        download(filenames, audio_dir, n_jobs=n_jobs, chunk_size=chunk_size)
+        desed.download_real.download(filenames, audio_dir, n_jobs=n_jobs, chunk_size=chunk_size)

@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-#########################################################################
-# Part of this file is derived from Curious AI/mean-teacher, under the Creative Commons Attribution-NonCommercial
-# Part of this file is derived from pytorch library.
-# Copyright Nicolas Turpault, Romain Serizel, Justin Salamon, Ankit Parag Shah, 2019, v1.0
-# This software is distributed under the terms of the License MIT
-#########################################################################
 from __future__ import print_function
 
 import glob
@@ -20,9 +13,6 @@ import torch
 from desed.utils import create_folder
 from torch import nn
 from dcase_util.data import DecisionEncoder
-
-from DataLoad import Compose
-from utilities.Transforms import ApplyLog, PadOrTrunc, AugmentGaussianNoise, ToTensor, Normalize
 
 
 class ManyHotEncoder:
@@ -239,13 +229,11 @@ def to_cuda_if_available(*args):
 
 
 class SaveBest:
-    """ Callback of a model to store the best model based on a criterion
+    """ Callback to get the best value and epoch
     Args:
-        model: torch.nn.Module, the model which will be tracked
         val_comp: str, (Default value = "inf") "inf" or "sup", inf when we store the lowest model, sup when we
             store the highest model
     Attributes:
-        model: torch.nn.Module, the model which will be tracked
         val_comp: str, "inf" or "sup", inf when we store the lowest model, sup when we
             store the highest model
         best_val: float, the best values of the model based on the criterion chosen
@@ -267,9 +255,6 @@ class SaveBest:
         """ Apply the callback
         Args:
             value: float, the value of the metric followed
-            model_path: str, the path where to store the model
-            parameters: dict, the parameters to be saved by pytorch in the file model_path.
-            If model_path is not None, parameters is not None, and the other way around.
         """
         decision = False
         if self.current_epoch == 0:
@@ -283,7 +268,7 @@ class SaveBest:
 
 
 class EarlyStopping:
-    """ Callback of a model to store the best model based on a criterion
+    """ Callback to stop training if the metric have not improved during multiple epochs.
     Args:
         patience: int, number of epochs with no improvement before stopping the model
         val_comp: str, (Default value = "inf") "inf" or "sup", inf when we store the lowest model, sup when we
@@ -340,7 +325,7 @@ class AverageMeterSet:
         return self.meters[key]
 
     def update(self, name, value, n=1):
-        if not name in self.meters:
+        if name not in self.meters:
             self.meters[name] = AverageMeter()
         self.meters[name].update(value, n)
 
@@ -363,10 +348,10 @@ class AverageMeterSet:
     def __str__(self):
         string = ""
         for name, meter in self.meters.items():
-            format = ".4f"
+            fmat = ".4f"
             if meter.val < 0.01:
-                format = ".2E"
-            string += "{} {:{format}} \t".format(name, meter.val, format=format)
+                fmat = ".2E"
+            string += "{} {:{format}} \t".format(name, meter.val, format=fmat)
         return string
 
 
@@ -390,24 +375,6 @@ class AverageMeter:
 
     def __format__(self, format):
         return "{self.avg:{format}}".format(self=self, format=format)
-
-
-def get_transforms(frames, scaler=None, add_axis_conv=True, noise=None):
-    transf = []
-    unsqueeze_axis = None
-    if add_axis_conv:
-        unsqueeze_axis = 0
-
-    # Todo, add other augmentations
-    if noise is not None:
-        transf.append(AugmentGaussianNoise(mean=0., **noise))
-        # transf.append(AugmentGaussianNoise(mean=0., std=0.5))
-
-    transf.extend([ApplyLog(), PadOrTrunc(nb_frames=frames), ToTensor(unsqueeze_axis=unsqueeze_axis)])
-    if scaler is not None:
-        transf.append(Normalize(scaler=scaler))
-
-    return Compose(transf)
 
 
 def generate_tsv_wav_durations(audio_dir, out_tsv):
@@ -445,11 +412,11 @@ def generate_tsv_from_isolated_events(wav_folder, out_tsv=None):
         list_dirs = [d for d in os.listdir(wav_folder) if osp.isdir(osp.join(wav_folder, d))]
         for dirname in list_dirs:
             list_isolated_files = []
-            for dir, subdir, fnames in os.walk(osp.join(wav_folder, dirname)):
+            for directory, subdir, fnames in os.walk(osp.join(wav_folder, dirname)):
                 for fname in fnames:
                     if osp.splitext(fname)[1] in [".wav"]:
                         # Get the level folders and keep it in the tsv
-                        subfolder = dir.split(dirname + os.sep)[1:]
+                        subfolder = directory.split(dirname + os.sep)[1:]
                         if len(subfolder) > 0:
                             subdirs = osp.join(*subfolder)
                         else:

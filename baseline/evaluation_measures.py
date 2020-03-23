@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-#########################################################################
-# Initial software
-# Copyright Nicolas Turpault, Romain Serizel, Justin Salamon, Ankit Parag Shah, 2019, v1.0
-# This software is distributed under the terms of the License MIT
-#########################################################################
 import os
 from os import path as osp
 
@@ -19,7 +14,6 @@ from psds_eval import PSDSEval
 import config as cfg
 from utilities.Logger import create_logger
 from utilities.utils import ManyHotEncoder, to_cuda_if_available
-
 logger = create_logger(__name__)
 
 
@@ -83,11 +77,11 @@ def get_f_measure_by_class(torch_model, nb_tags, dataloader_, thresholds_=None):
         fn += fn_
         tn += tn_
 
-    macro_f_measure = np.zeros(nb_tags)
+    macro_f_score = np.zeros(nb_tags)
     mask_f_score = 2 * tp + fp + fn != 0
-    macro_f_measure[mask_f_score] = 2 * tp[mask_f_score] / (2 * tp + fp + fn)[mask_f_score]
+    macro_f_score[mask_f_score] = 2 * tp[mask_f_score] / (2 * tp + fp + fn)[mask_f_score]
 
-    return macro_f_measure
+    return macro_f_score
 
 
 def intermediate_at_measures(encoded_ref, encoded_est):
@@ -129,13 +123,15 @@ def get_event_list_current_file(df, fname):
 
 
 def event_based_evaluation_df(reference, estimated, t_collar=0.200, percentage_of_length=0.2):
-    """
-    Calculate EventBasedMetric given a reference and estimated dataframe
-    :param reference: pd.DataFrame containing "filename" "onset" "offset" and "event_label" columns which describe the
-    reference events
-    :param estimated: pd.DataFrame containing "filename" "onset" "offset" and "event_label" columns which describe the
-    estimated events to be compared with reference
-    :return: sed_eval.sound_event.EventBasedMetrics with the scores
+    """ Calculate EventBasedMetric given a reference and estimated dataframe
+
+    Args:
+        reference: pd.DataFrame containing "filename" "onset" "offset" and "event_label" columns which describe the
+            reference events
+        estimated: pd.DataFrame containing "filename" "onset" "offset" and "event_label" columns which describe the
+            estimated events to be compared with reference
+    Returns:
+         sed_eval.sound_event.EventBasedMetrics with the scores
     """
 
     evaluated_files = reference["filename"].unique()
@@ -165,6 +161,16 @@ def event_based_evaluation_df(reference, estimated, t_collar=0.200, percentage_o
 
 
 def segment_based_evaluation_df(reference, estimated, time_resolution=1.):
+    """ Calculate SegmentBasedMetrics given a reference and estimated dataframe
+
+        Args:
+            reference: pd.DataFrame containing "filename" "onset" "offset" and "event_label" columns which describe the
+                reference events
+            estimated: pd.DataFrame containing "filename" "onset" "offset" and "event_label" columns which describe the
+                estimated events to be compared with reference
+        Returns:
+             sed_eval.sound_event.SegmentBasedMetrics with the scores
+        """
     evaluated_files = reference["filename"].unique()
 
     classes = []
@@ -263,6 +269,7 @@ def psds_results(predictions, gtruth_df, gtruth_durations):
         print(f"\nPSD-Score (0, 1, 100): {psds_score.value:.5f}")
     except psds_eval.psds.PSDSEvalError as e:
         logger.error("psds did not work ....")
+        logger.error(e)
 
 
 def compute_sed_eval_metrics(predictions, groundtruth):

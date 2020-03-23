@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-#########################################################################
-# This file is derived from Curious AI/mean-teacher, under the Creative Commons Attribution-NonCommercial
-# Copyright Nicolas Turpault, Romain Serizel, Justin Salamon, Ankit Parag Shah, 2019, v1.0
-# This software is distributed under the terms of the License MIT
-#########################################################################
-
 import argparse
 import datetime
 import inspect
@@ -29,7 +23,8 @@ from utilities import ramps
 from utilities.Logger import create_logger
 from utilities.Scaler import ScalerPerAudio, Scaler
 from utilities.utils import ManyHotEncoder, SaveBest, to_cuda_if_available, weights_init, \
-    get_transforms, AverageMeterSet, generate_tsv_wav_durations, meta_path_to_audio_dir, EarlyStopping
+    AverageMeterSet, generate_tsv_wav_durations, meta_path_to_audio_dir, EarlyStopping
+from utilities.Transforms import get_transforms
 
 
 def adjust_learning_rate(optimizer, rampup_value, rampdown_value=1):
@@ -42,6 +37,7 @@ def adjust_learning_rate(optimizer, rampup_value, rampdown_value=1):
 
     """
     # LR warm-up to handle large minibatch sizes from https://arxiv.org/abs/1706.02677
+    # We commented parts on betas and weight decay to match 2nd system of last year from Orange
     lr = rampup_value * rampdown_value * cfg.max_learning_rate
     # beta1 = rampdown_value * cfg.beta1_before_rampdown + (1. - rampdown_value) * cfg.beta1_after_rampdown
     # beta2 = (1. - rampup_value) * cfg.beta2_during_rampdup + rampup_value * cfg.beta2_after_rampup
@@ -79,7 +75,6 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
     class_criterion, consistency_criterion = to_cuda_if_available(class_criterion, consistency_criterion)
 
     meters = AverageMeterSet()
-
     log.debug("Nb batches: {}".format(len(train_loader)))
     start = time.time()
 
@@ -114,8 +109,8 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
                 log.debug(weak_class_loss)
                 log.debug(f"rampup_value: {rampup_value}")
                 log.debug(f"tensor mean: {batch_input.mean()}")
-            meters.update('weak_class_loss', weak_class_loss.item())
 
+            meters.update('weak_class_loss', weak_class_loss.item())
             meters.update('Weak EMA loss', ema_class_loss.item())
 
             loss = weak_class_loss
@@ -168,12 +163,8 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
             update_ema_variables(model, ema_model, 0.999, global_step)
 
     epoch_time = time.time() - start
+    log.info(f"Epoch: {c_epoch}\t Time {epoch_time:.2f}\t {meters}")
 
-    log.info(
-        'Epoch: {}\t'
-        'Time {:.2f}\t'
-        '{meters}'.format(
-            c_epoch, epoch_time, meters=meters))
     return loss
 
 
@@ -284,12 +275,15 @@ if __name__ == '__main__':
 
     # Model and transform parameters different for source separated
     if use_separated_sources:
-        n_channel = 5
+        n_channel = 5  # 2 are combined channels
         add_axis_conv = False
+        combine_channels = None
     else:
         n_channel = 1
         add_axis_conv = True
+        combine_channels = None
 
+    # Model taken from 2nd of dcase19 challenge: see Delphin-Poulat2019 in the results.
     n_layers = 7
     crnn_kwargs = {"n_in_channel": n_channel, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 128,
                    "n_layers_RNN": 2,
@@ -299,13 +293,6 @@ if __name__ == '__main__':
                    "nb_filters": [16,  32,  64,  128,  128, 128, 128],
                    "pooling": [[2, 2], [2, 2], [1, 2], [1, 2], [1, 2], [1, 2], [1, 2]]}
     pooling_time_ratio = 4  # 2 * 2
-    # crnn_kwargs = {"n_in_channel": 1, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 64,
-    #                "n_layers_RNN": 2,
-    #                "activation": "glu",
-    #                "dropout": 0.5,
-    #                "kernel_size": 3 * [3], "padding": 3 * [1], "stride": 3 * [1], "nb_filters": [64, 64, 64],
-    #                "pooling": list(3 * ((2, 4),))}
-    # pooling_time_ratio = 8  # 2 * 2 * 2
 
     out_nb_frames_1s = cfg.sample_rate / cfg.hop_size / pooling_time_ratio
     median_window = max(int(cfg.median_window_s * out_nb_frames_1s), 1)
@@ -323,18 +310,15 @@ if __name__ == '__main__':
 
     classes = cfg.classes
     many_hot_encoder = ManyHotEncoder(classes, n_frames=cfg.max_frames // pooling_time_ratio)
+    encod_func = many_hot_encoder.encode_strong_df
 
     # Normalisation per audio or on the full dataset
     if cfg.scaler_type == "dataset":
         transforms = get_transforms(cfg.max_frames, add_axis_conv=add_axis_conv)
-        train_weak_data = DataLoadDf(dfs["weak"], many_hot_encoder.encode_strong_df,
-                                     transform=transforms)
-        unlabel_data = DataLoadDf(dfs["unlabel"],
-                                  many_hot_encoder.encode_strong_df,
-                                  transform=transforms)
-        train_synth_data = DataLoadDf(dfs["train_synthetic"],
-                                      many_hot_encoder.encode_strong_df,
-                                      transform=transforms)
+        train_weak_data = DataLoadDf(dfs["weak"], encod_func, transforms)
+        unlabel_data = DataLoadDf(dfs["unlabel"], encod_func, transforms)
+        train_synth_data = DataLoadDf(dfs["train_synthetic"], encod_func, transforms)
+
         scaler_args = []
         scaler = Scaler()
         # # Only on real data since that's our final goal and test data are real
@@ -344,18 +328,16 @@ if __name__ == '__main__':
         scaler_args = [cfg.scale_peraudio_on, cfg.scale_peraudio_type]
         scaler = ScalerPerAudio(*scaler_args)
 
-    transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv=add_axis_conv, noise={"snr": cfg.noise_snr})
-    transforms_valid = get_transforms(cfg.max_frames, scaler=scaler, add_axis_conv=add_axis_conv)
+    transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv,
+                                noise_dict_params={"snr": cfg.noise_snr}, combine_channels_args=combine_channels)
+    transforms_valid = get_transforms(cfg.max_frames, scaler, add_axis_conv, combine_channels_args=combine_channels)
 
-    train_weak_data = DataLoadDf(dfs["weak"], many_hot_encoder.encode_strong_df, transform=transforms,
-                                 in_memory=cfg.in_memory)
-    unlabel_data = DataLoadDf(dfs["unlabel"], many_hot_encoder.encode_strong_df, transform=transforms,
-                              in_memory=cfg.in_memory_unlab)
-    train_synth_data = DataLoadDf(dfs["train_synthetic"], many_hot_encoder.encode_strong_df, transform=transforms,
-                                  in_memory=cfg.in_memory)
+    train_weak_data = DataLoadDf(dfs["weak"], encod_func, transforms, in_memory=cfg.in_memory)
+    unlabel_data = DataLoadDf(dfs["unlabel"], encod_func, transforms, in_memory=cfg.in_memory_unlab)
+    train_synth_data = DataLoadDf(dfs["train_synthetic"], encod_func, transforms, in_memory=cfg.in_memory)
 
-    valid_synth_data = DataLoadDf(dfs["valid_synthetic"], many_hot_encoder.encode_strong_df,
-                                  transform=transforms_valid, return_indexes=True, in_memory=cfg.in_memory)
+    valid_synth_data = DataLoadDf(dfs["valid_synthetic"], encod_func, transforms_valid,
+                                  return_indexes=True, in_memory=cfg.in_memory)
     # valid_weak_data = DataLoadDf(dfs["valid_weak"], many_hot_encoder.encode_weak,
     #                              transform=transforms_valid, in_memory=cfg.in_memory)
 
@@ -498,13 +480,13 @@ if __name__ == '__main__':
     # Validation
     # ##############
     with torch.no_grad():
-        transforms_valid = get_transforms(cfg.max_frames, scaler, add_axis_conv=add_axis_conv)
+        transforms_valid = get_transforms(cfg.max_frames, scaler, add_axis_conv, combine_channels_args=combine_channels)
         predicitons_fname = os.path.join(saved_pred_dir, "baseline_validation.tsv")
         predicitons_fname18 = os.path.join(saved_pred_dir, "baseline_eval18.tsv")
 
-        validation_data = DataLoadDf(dfs["validation"], many_hot_encoder.encode_strong_df,
+        validation_data = DataLoadDf(dfs["validation"], encod_func,
                                      transform=transforms_valid, return_indexes=True)
-        eval18_data = DataLoadDf(dfs["eval2018"], many_hot_encoder.encode_strong_df,
+        eval18_data = DataLoadDf(dfs["eval2018"], encod_func,
                                  transform=transforms_valid, return_indexes=True)
 
         validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)

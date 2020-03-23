@@ -16,10 +16,10 @@ eval_desed = os.path.join(workspace, "dataset/metadata/eval/public.tsv")
 # Useful because not just metadata replaced by audio, there are subsets (eval2018, test2018) so we specify the audio
 audio_validation_dir = os.path.join(workspace, 'dataset/audio/validation')
 
-## Separated data
+# Separated data
 weak_ss = os.path.join(workspace, 'dataset/audio/train/weak_ss/separated_sources')
 unlabel_ss = os.path.join(workspace, 'dataset/audio/train/unlabel_in_domain_ss/separated_sources')
-synthetic_ss = os.path.join(workspace, 'dataset/audio/train/synthetic20/separated_sources')
+synthetic_ss = os.path.join(workspace, 'dataset/audio/train/synthetic20_reverb/separated_sources')
 validation_ss = os.path.join(workspace, 'dataset/audio/validation_ss/separated_sources')
 eval_desed_ss = os.path.join(workspace, "dataset/audio/eval/public_ss/separated_sources")
 
@@ -51,7 +51,7 @@ batch_size = 24
 
 noise_snr = 30
 
-# Todo, reput as normal
+# Todo, reput as normal (test purpose)
 import torch
 if torch.cuda.is_available():
     n_epoch = 200

@@ -16,8 +16,9 @@ from DataLoad import DataLoadDf
 from Desed import DESED
 from evaluation_measures import compute_sed_eval_metrics, get_predictions, \
     psds_results
-from utilities.utils import ManyHotEncoder, to_cuda_if_available, get_transforms, generate_tsv_wav_durations, \
+from utilities.utils import ManyHotEncoder, to_cuda_if_available, generate_tsv_wav_durations, \
     meta_path_to_audio_dir
+from utilities.Transforms import get_transforms
 from utilities.Logger import create_logger
 from utilities.Scaler import Scaler, ScalerPerAudio
 from models.CRNN import CRNN

@@ -1,5 +1,4 @@
 import time
-import logging
 import warnings
 
 import numpy as np
@@ -139,7 +138,7 @@ class ScalerPerAudio:
     """Normalize inputs one by one
         Args:
             normalization: str, in {"global", "per_channel"}
-            type: str, in {"mean", "max"}
+            type_norm: str, in {"mean", "max"}
         """
 
     def __init__(self, normalization="global", type_norm="mean"):
