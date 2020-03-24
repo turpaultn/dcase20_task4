@@ -192,12 +192,9 @@ class DESED:
                                                     ext_ss_feature_file)
         if len(df_features) != 0:
             df_features.to_csv(features_tsv, sep="\t", index=False)
-            logger.info(f"features created in {time.time() - t:.2f}s, metadata: {features_tsv}")
+            logger.info(f"features created/retrieved in {time.time() - t:.2f}s, metadata: {features_tsv}")
         else:
             raise IndexError(f"Empty features DataFrames {features_tsv}")
-        # else:
-        #     logger.info(f"loading features, \nmetadata: {features_tsv}")
-        #     df_features = pd.read_csv(features_tsv, sep="\t")
         return df_features
 
     def calculate_mel_spec(self, audio, compute_log=False):
