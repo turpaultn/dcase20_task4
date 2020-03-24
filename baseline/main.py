@@ -206,6 +206,8 @@ def get_dfs(desed_dataset, nb_files=None, separated_sources=False):
 
 
 if __name__ == '__main__':
+    torch.manual_seed(2020)
+    np.random.seed(2020)
     logger = create_logger(__name__ + "/" + inspect.currentframe().f_code.co_name, terminal_level=cfg.terminal_level)
     logger.info("Baseline 2020")
     logger.info(f"Starting time: {datetime.datetime.now()}")

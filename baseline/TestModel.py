@@ -19,6 +19,7 @@ from models.CRNN import CRNN
 import config as cfg
 
 logger = create_logger(__name__)
+torch.manual_seed(2020)
 
 
 def _load_crnn(state):
