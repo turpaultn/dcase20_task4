@@ -14,6 +14,8 @@ from desed.utils import create_folder
 from torch import nn
 from dcase_util.data import DecisionEncoder
 
+import config as cfg
+
 
 class ManyHotEncoder:
     """"
@@ -439,3 +441,15 @@ def meta_path_to_audio_dir(tsv_path):
 
 def audio_dir_to_meta_path(audio_dir):
     return audio_dir.replace("audio", "metadata") + ".tsv"
+
+
+def get_durations_df(gtruth_path, audio_dir=None):
+    if audio_dir is None:
+        audio_dir = meta_path_to_audio_dir(cfg.synthetic)
+    path, ext = os.path.splitext(gtruth_path)
+    path_durations_synth = path + "_durations" + ext
+    if not os.path.exists(path_durations_synth):
+        durations_df = generate_tsv_wav_durations(audio_dir, path_durations_synth)
+    else:
+        durations_df = pd.read_csv(path_durations_synth, sep="\t")
+    return durations_df

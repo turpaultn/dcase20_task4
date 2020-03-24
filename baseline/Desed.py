@@ -35,37 +35,37 @@ class DESED:
     - dataset
         - metadata
             - train
+                - synthetic20
+                    - soundscapes.tsv   (audio_dir associated: audio/train/synthetic20/soundscapes)
+                - unlabel_in_domain.tsv (audio_dir associated: audio/train/unlabel_in_domain)
                 - weak.tsv              (audio_dir associated: audio/train/weak)
             - validation
-                - validation.tsv        (audio_dir associated: audio/validation)
+                - validation.tsv        (audio_dir associated: audio/validation) --> so audio_dir has to be declared
                 - test_dcase2018.tsv    (audio_dir associated: audio/validation)
                 - eval_dcase2018.tsv    (audio_dir associated: audio/validation)
             -eval
                 - public.tsv            (audio_dir associated: audio/eval/public)
         - audio
             - train
+                - synthetic20           (synthetic data generated for dcase 2020, you can create your own)
+                    - soundscapes
+                    - separated_sources (optional, only using source separation)
+                - unlabel_in_domain
+                - unlabel_in_domain_ss  (optional, only using source separation)
                 - weak
+                - weak_ss               (optional, only using source separation)
             - validation
-            - eval
-                - public
-                    - aaa.wav
-                    - aaa_sources
-                        - foreground
-                            - s1.wav
-                            - s2.wav
-                        - background
-                            - s3.wav
-                    - bbb.wav
+            - validation_ss             (optional, only using source separation)
 
     Args:
         base_feature_dir: str, optional, base directory to store the features
-        recompute_features: bool, optional, wether or not to recompute features
+        recompute_features: bool, optional, whether or not to recompute features
         compute_log: bool, optional, whether or not saving the logarithm of the feature or not
             (particularly useful to put False to apply some data augmentation)
 
     Attributes:
         base_feature_dir: str, base directory to store the features
-        recompute_features: bool, wether or not to recompute features
+        recompute_features: bool, whether or not to recompute features
         compute_log: bool, whether or not saving the logarithm of the feature or not
             (particularly useful to put False to apply some data augmentation)
         feature_dir : str, directory to store the features
@@ -141,9 +141,9 @@ class DESED:
             tsv_path: str, tsv path in the initial dataset
             audio_dir: str, the path where to search the filename of the df
             audio_dir_ss: str, the path where to search the separated_sources
-            pattern_ss: str, only when audio_dir_ss is not None, this should be defined
-                the pattern that's added after normal filenames to get associated separated sources
-            ext_ss_feature_file: str, only when audio_dir_ss is not None
+            pattern_ss: str, only when audio_dir_ss is not None, this should be defined. The pattern that's added
+                after normal filenames to get associated separated sources (have been done during source separation)
+            ext_ss_feature_file: str, only when audio_dir_ss is not None, what to add at the end of the feature files
             nb_files: int, optional, the number of file to take in the dataframe if taking a small part of the dataset.
             download: bool, optional, whether or not to download the data from the internet (youtube).
 
@@ -157,8 +157,9 @@ class DESED:
         if audio_dir is None:
             audio_dir = meta_path_to_audio_dir(tsv_path)
         # Path to save features, subdir, otherwise could have duplicate paths for synthetic data
-        audio_dir = audio_dir[:-1] if audio_dir.endswith(osp.sep) else audio_dir
-        subdir = osp.sep.join(audio_dir.split(osp.sep)[-2:])
+        fdir = audio_dir if audio_dir_ss is None else audio_dir_ss
+        fdir = fdir[:-1] if fdir.endswith(osp.sep) else fdir
+        subdir = osp.sep.join(fdir.split(osp.sep)[-2:])
         meta_feat_dir = osp.join(self.meta_feat_dir, subdir)
         feature_dir = osp.join(self.feature_dir, subdir)
         os.makedirs(meta_feat_dir, exist_ok=True)

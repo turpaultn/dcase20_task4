@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
-#########################################################################
-# Initial software
-# Copyright Nicolas Turpault, Romain Serizel, Justin Salamon, Ankit Parag Shah, 2019, v1.0
-# This software is distributed under the terms of the License MIT
-#########################################################################
 import argparse
 import os
-import warnings
 
 import torch
 from torch.utils.data import DataLoader
@@ -65,23 +59,16 @@ def _get_predictions(state, strong_dataloader_ind, median_win=None, save_preds_p
 
 
 def test_model(state, gtruth_df, save_preds_path=None, median_win=None, add_axis_conv=True):
-    # if save_preds_path is not None and os.path.exists(save_preds_path):
-    #     warnings.warn(f"Predictions are not computing since {save_preds_path} already exists")
-    #     predictions = pd.read_csv(save_preds_path, sep="\t")
-    # else:
     pred_df = gtruth_df.copy()
     # Define dataloader
     many_hot_encoder = ManyHotEncoder.load_state_dict(state["many_hot_encoder"])
     scaler = _load_scaler(state)
     transforms_valid = get_transforms(cfg.max_frames, scaler=scaler, add_axis_conv=add_axis_conv)
 
-    strong_dataload = DataLoadDf(pred_df, many_hot_encoder.encode_strong_df,
-                                 transform=transforms_valid, return_indexes=True)
+    strong_dataload = DataLoadDf(pred_df, many_hot_encoder.encode_strong_df, transforms_valid, return_indexes=True)
     strong_dataloader_ind = DataLoader(strong_dataload, batch_size=cfg.batch_size, drop_last=False)
 
-    predictions = _get_predictions(state, strong_dataloader_ind, median_win=median_win,
-                                   save_preds_path=save_preds_path)
-
+    predictions = _get_predictions(state, strong_dataloader_ind, median_win=median_win, save_preds_path=save_preds_path)
     compute_sed_eval_metrics(predictions, gtruth_df)
     return predictions
 
@@ -108,7 +95,8 @@ if __name__ == '__main__':
 
     # Source separation
     parser.add_argument("-a", '--base_dir_ss', type=str, default=None,
-                        help="Base directory where to search subdirectories in which there are isolated events")
+                        help="Base directory of source separation. "
+                             "Path where to search subdirectories in which there are isolated events")
 
     # Dev
     parser.add_argument("-n", '--nb_files', type=int, default=None,

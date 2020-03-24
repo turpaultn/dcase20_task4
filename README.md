@@ -44,22 +44,22 @@ The dataset for sound event detection of DCASE2020 task 4 is composed of:
 
 ### Pre-computed synthetic data used to train baseline
 - Train:
-	- synthetic20/soundscapes [2595 files] (DESED) --> base files, not used to train baseline
-	- *synthetic20_reverb/soundscapes [2595 files] (uses [fuss] rir_data and [fuss_scripts])
-	- **synthetic20_reverb/separated_sources [2595 folders] (uses [fuss] baseline_model and [fuss_scripts])
-	- **weak_ss/separated_sources [1578 folders] (uses [fuss] baseline_model and [fuss_scripts])
-	- **unlabel_in_domain_ss/separated_sources [14 412 folders] (uses [fuss] baseline_model and [fuss_scripts])
-- **Validation
-	- validation_ss/separated_sources [1168 files] (uses [fuss] baseline_model and [fuss_scripts])
+	- synthetic20/soundscapes [2584 files] (DESED) --> base files, not used to train baseline
+	- *synthetic20/separated_sources [2584 files] (DESED) --> base files, not used to train baseline
+	- *weak_ss/separated_sources [1578 folders] (uses [fuss] baseline_model and [fuss_scripts])
+	- *unlabel_in_domain_ss/separated_sources [14 412 folders] (uses [fuss] baseline_model and [fuss_scripts])
+- Validation
+	- *validation_ss/separated_sources [1168 files] (uses [fuss] baseline_model and [fuss_scripts])
 
-*Used in baseline without source separation
-**Used in baseline with source separation
+* Only used in baseline with source separation
+
+*Note: the reverberated data are not computed for the baseline*
 
 ## Scripts
 
 In the [`scripts/`](scripts) folder, you can find the different steps to generate:
-- Synthetic data
-- Reverberated synthetic data
+- Synthetic soundscapes
+- Reverberated synthetic data (Not used in the baseline)
 - Separated sources of recorded and synthetic mixtures 
 
 	
@@ -67,6 +67,8 @@ In the [`scripts/`](scripts) folder, you can find the different steps to generat
 **It is likely that you'll have download issues with the real recordings.
 At the end of the download, please send a mail with the TSV files
 created in the `missing_files` directory.** (in priority to Nicolas Turpault and Romain Serizel)
+
+However, if none of the audio files have been downloaded, it is probably due to an internet, proxy problem.
 
 See [Desed repo][desed] or [Desed_website][desed_website] for more info.
 

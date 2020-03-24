@@ -78,7 +78,7 @@ class Scaler:
         self.mean_ /= counter
         self.mean_of_square_ /= counter
 
-        ## To be used if data different shape, but need to stop the iteration before.
+        # ### To be used if data different shape, but need to stop the iteration before.
         # rest = len(dataset) - i
         # if rest != 0:
         #     weight = rest / float(i + rest)

@@ -1,8 +1,4 @@
 import bisect
-import glob
-import itertools
-import os
-
 import numpy as np
 import pandas as pd
 import torch
@@ -13,6 +9,7 @@ from torch.utils.data.sampler import Sampler
 
 from utilities.Logger import create_logger
 import config as cfg
+from utilities.Transforms import Compose
 
 torch.manual_seed(0)
 random.seed(0)
@@ -29,21 +26,17 @@ class DataLoadDf(Dataset):
             "feature_filename"
             "feature_filename", "event_labels"
             "feature_filename", "onset", "offset", "event_label"
-        get_feature_file_func: function(), function which take a filename as input and return a feature file
         encode_function: function(), function which encode labels
         transform: function(), (Default value = None), function to be applied to the sample (pytorch transformations)
         return_indexes: bool, (Default value = False) whether or not to return indexes when use __getitem__
 
     Attributes:
         df: pandas.DataFrame, the dataframe containing the set infromation (feat_filenames, labels, ...)
-        get_feature_file_func: function(), function which take a filename as input and return a feature file
         encode_function: function(), function which encode labels
         transform : function(), function to be applied to the sample (pytorch transformations)
         return_indexes: bool, whether or not to return indexes when use __getitem__
     """
-    def __init__(self, df, encode_function, transform=None,
-                 return_indexes=False, in_memory=False):
-
+    def __init__(self, df, encode_function, transform=None, return_indexes=False, in_memory=False):
         self.df = df
         self.encode_function = encode_function
         self.transform = transform
@@ -56,7 +49,6 @@ class DataLoadDf(Dataset):
 
     def set_return_indexes(self, val):
         """ Set the value of self.return_indexes
-
         Args:
             val : bool, whether or not to return indexes when use __getitem__
         """
@@ -173,61 +165,6 @@ class DataLoadDf(Dataset):
         return DataLoadDf(self.df, self.encode_function, transforms, self.return_indexes, self.in_memory)
 
 
-class DataLoadDfSS(DataLoadDf):
-    def __init__(self, df, encode_function, transform=None, return_indexes=False, in_memory=False,
-                 ss_pattern="_events"):
-        super(DataLoadDfSS, self).__init__(df, encode_function, transform, return_indexes, in_memory)
-        self.ss_pattern = ss_pattern
-
-    def get_feature_file_func(self, filename):
-        if not self.in_memory or self.features.get(filename) is None:
-            # Get the mixture
-            arr_loaded_data = np.expand_dims(np.load(filename), 0)
-            # Get feat_filenames of separated sources
-            path_to_search = os.path.join(os.path.splitext(filename)[0] + self.ss_pattern, "*.npy")
-            filenames_to_load = glob.glob(path_to_search)
-            if len(filenames_to_load) == 0:
-                warnings.warn(f"Unexpected empty list for filenames_to_load, check {path_to_search}")
-            for fname in filenames_to_load:
-                arr_loaded_data = np.concatenate((arr_loaded_data, np.expand_dims(np.load(fname), 0)))
-            if self.in_memory:
-                self.features[filename] = arr_loaded_data
-        else:
-            arr_loaded_data = self.features[filename]
-
-        return arr_loaded_data
-
-
-class Compose(object):
-    """Composes several transforms together.
-    Args:
-        transforms: list of ``Transform`` objects, list of transforms to compose.
-        Example of transform: ToTensor()
-    """
-
-    def __init__(self, transforms):
-        self.transforms = transforms
-
-    def add_transform(self, transform):
-        t = self.transforms.copy()
-        t.append(transform)
-        return Compose(t)
-
-    def __call__(self, audio):
-        for t in self.transforms:
-            audio = t(audio)
-        return audio
-
-    def __repr__(self):
-        format_string = self.__class__.__name__ + '('
-        for t in self.transforms:
-            format_string += '\n'
-            format_string += '    {0}'.format(t)
-        format_string += '\n)'
-
-        return format_string
-
-
 class ConcatDataset(Dataset):
     """
     DESED to concatenate multiple datasets.
@@ -287,103 +224,6 @@ class ConcatDataset(Dataset):
         return df
 
 
-class Subset(DataLoadDf):
-    """
-    Subset of a dataset to be used when separating in multiple subsets
-
-    Args:
-        dataload_df: DataLoadDf or similar, dataset to be split
-        indices: sequence, list of indices to keep in this subset
-    """
-    def __init__(self, dataload_df, indices):
-        self.indices = indices
-        self.df = dataload_df.df.loc[indices].reset_index(inplace=False, drop=True)
-
-        super(Subset, self).__init__(self.df, dataload_df.encode_function,
-                                     dataload_df.transform, dataload_df.return_indexes)
-
-    def __getitem__(self, idx):
-        return super(Subset, self).__getitem__(idx)
-
-
-def random_split(dataset, lengths):
-    """
-    Randomly split a dataset into non-overlapping new datasets of given lengths.
-
-    Args:
-        dataset: DESED, dataset to be split
-        lengths: sequence, lengths of splits to be produced
-    """
-    # if ratio > 1:
-    # 	raise ValueError("Sum of input lengths does not equal the length of the input dataset!")
-
-    if sum(lengths) != len(dataset):
-        raise ValueError("Sum of input lengths does not equal the length of the input dataset!")
-
-    indices = np.random.permutation(sum(lengths))
-    return [Subset(dataset, indices[offset - length:offset]) for offset, length in
-            zip(itertools.accumulate(lengths), lengths)]
-
-
-def train_valid_split(dataset, validation_amount):
-    valid_length = int(validation_amount * len(dataset))
-    train_length = len(dataset) - valid_length
-
-    train_dataset, valid_dataset = random_split(dataset, [train_length, valid_length])
-    return train_dataset, valid_dataset
-
-
-class ClusterRandomSampler(Sampler):
-    """Takes a dataset with cluster_indices property, cuts it into batch-sized chunks
-    Drops the extra items, not fitting into exact batches
-    Args:
-        data_source : DESED, a DESED to sample from. Should have a cluster_indices property
-        batch_size : int, a batch size that you would like to use later with Dataloader class
-        shuffle : bool, whether to shuffle the data or not
-    Attributes:
-        data_source : DESED, a DESED to sample from. Should have a cluster_indices property
-        batch_size : int, a batch size that you would like to use later with Dataloader class
-        shuffle : bool, whether to shuffle the data or not
-    """
-
-    def __init__(self, data_source, batch_size=None, shuffle=True):
-        super(ClusterRandomSampler, self).__init__(data_source)
-        self.data_source = data_source
-        if batch_size is not None:
-            assert self.data_source.batch_sizes is None, "do not declare batch size in sampler " \
-                                                         "if data source already got one"
-            self.batch_sizes = [batch_size for _ in self.data_source.cluster_indices]
-        else:
-            self.batch_sizes = self.data_source.batch_sizes
-        self.shuffle = shuffle
-
-    def flatten_list(self, lst):
-        return [item for sublist in lst for item in sublist]
-
-    def __iter__(self):
-
-        batch_lists = []
-        for j, cluster_indices in enumerate(self.data_source.cluster_indices):
-            batches = [
-                cluster_indices[i:i + self.batch_sizes[j]] for i in range(0, len(cluster_indices), self.batch_sizes[j])
-            ]
-            # filter our the shorter batches
-            batches = [_ for _ in batches if len(_) == self.batch_sizes[j]]
-            if self.shuffle:
-                random.shuffle(batches)
-            batch_lists.append(batches)
-
-            # flatten lists and shuffle the batches if necessary
-        # this works on batch level
-        lst = self.flatten_list(batch_lists)
-        if self.shuffle:
-            random.shuffle(lst)
-        return iter(lst)
-
-    def __len__(self):
-        return len(self.data_source)
-
-
 class MultiStreamBatchSampler(Sampler):
     """Takes a dataset with cluster_indices property, cuts it into batch-sized chunks
     Drops the extra items, not fitting into exact batches
@@ -429,5 +269,4 @@ def grouper(iterable, n):
     "Collect data into fixed-length chunks or blocks"
     # grouper('ABCDEFG', 3) --> ABC DEF"
     args = [iter(iterable)] * n
-
     return zip(*args)

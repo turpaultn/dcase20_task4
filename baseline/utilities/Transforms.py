@@ -4,8 +4,6 @@ import librosa
 import numpy as np
 import torch
 
-from DataLoad import Compose
-
 
 class Transform:
     def transform_data(self, data):
@@ -299,3 +297,33 @@ def get_transforms(frames, scaler=None, add_axis_conv=True, noise_dict_params=No
         transf.append(Normalize(scaler=scaler))
 
     return Compose(transf)
+
+
+class Compose(object):
+    """Composes several transforms together.
+    Args:
+        transforms: list of ``Transform`` objects, list of transforms to compose.
+        Example of transform: ToTensor()
+    """
+
+    def __init__(self, transforms):
+        self.transforms = transforms
+
+    def add_transform(self, transform):
+        t = self.transforms.copy()
+        t.append(transform)
+        return Compose(t)
+
+    def __call__(self, audio):
+        for t in self.transforms:
+            audio = t(audio)
+        return audio
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        for t in self.transforms:
+            format_string += '\n'
+            format_string += '    {0}'.format(t)
+        format_string += '\n)'
+
+        return format_string
