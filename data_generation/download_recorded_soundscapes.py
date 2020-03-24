@@ -27,7 +27,7 @@ if __name__ == "__main__":
     # To be changed for your root folder if needed (if dcase2019 used)
     t = time.time()
     parser = argparse.ArgumentParser()
-    parser.add_argument('--basedir', type=str, default="..",
+    parser.add_argument('--basedir', type=str, default="../dataset",
                         help="the base folder of the dataset (will create subset automatically)")
     parser.add_argument('--n_jobs', type=int, default=3,
                         help="The number of parallel jobs to download the data")
