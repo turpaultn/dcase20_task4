@@ -13,7 +13,10 @@ GENERATED_PATTERN_RECORDED=_ss/separated_sources  # The pattern to add after the
 AUDIO_PATH_SYNTH=${BASE_DATASET}/audio/train/synthetic20/soundscapes
 GENERATED_SYNTH=${BASE_DATASET}/audio/train/synthetic20/separated_sources
 
-MODEL_DIR=../baseline_model  # Path pointing to google folder model
+CHECKPOINT_MODEL=../baseline_model/baseline_model  # Path pointing to google checkoint
+INFERENCE_META=../baseline_model/baseline_inference.meta  # Path pointing to google metagraph
+#CHECKPOINT_MODEL=../dry_baseline_model/dry_model.ckpt-450703  # Path pointing to google checkoint
+#INFERENCE_META=../dry_baseline_model/dry_inference.meta  # Path pointing to google metagraph
 SCRIPTS_PATH=../data_generation
 
 ######## Under this line you should not have to change anything ###########
@@ -25,11 +28,11 @@ for audio_path in "${arr[@]}"
 do
    echo "${audio_path}"
    python ${SCRIPTS_PATH}/separate_wavs.py --audio_path=${audio_path} \
-   --output_folder=${audio_path}${GENERATED_PATTERN_RECORDED} --model_dir=${MODEL_DIR}
+   --output_folder=${audio_path}${GENERATED_PATTERN_RECORDED} --checkpoint=${CHECKPOINT_MODEL} --inference=${INFERENCE_META}
    # or do whatever with individual element of the array
 done
 
 # Synthetic (generated) data
 python ${SCRIPTS_PATH}/separate_wavs.py --audio_path=${AUDIO_PATH_SYNTH} \
---output_folder=${GENERATED_SYNTH} --model_dir=${MODEL_DIR}
+--output_folder=${GENERATED_SYNTH} --checkpoint=${CHECKPOINT_MODEL} --inference=${INFERENCE_META}
 

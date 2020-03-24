@@ -57,7 +57,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("-a", '--audio_path', type=str, required=True)
     parser.add_argument("-o", '--output_folder', type=str, required=True)
-    parser.add_argument("-m", "--model_dir", type=str, required=True)
+    parser.add_argument("-c", "--checkpoint", type=str, required=True)
+    parser.add_argument("-i", "--inference", type=str, required=True)
     f_args = parser.parse_args()
 
     wav_list = glob.glob(osp.join(f_args.audio_path, "*.wav"))
@@ -65,9 +66,11 @@ if __name__ == '__main__':
         wav_list = glob.glob(osp.join(f_args.audio_path, "soundscapes", "*.wav"))
     if len(wav_list) == 0:
         raise IndexError(f"Empty wav_list, you need to give a valid audio_path. Not valid: {f_args.audio_path}")
-    model_dir = f_args.model_dir
-    checkpoint_path = osp.join(model_dir, 'baseline_model')
-    metagraph_path = osp.join(model_dir, 'baseline_inference.meta')
+    # model_dir = f_args.model_dir
+    # checkpoint_path = osp.join(model_dir, 'baseline_model')
+    # metagraph_path = osp.join(model_dir, 'baseline_inference.meta')
+    checkpoint_path = f_args.checkpoint
+    metagraph_path = f_args.inference
     ss_model = inference.SeparationModel(checkpoint_path, metagraph_path)
 
     main(wav_list, ss_model, f_args.output_folder)
