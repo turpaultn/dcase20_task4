@@ -94,27 +94,41 @@ alpha_ct is the cost of cross-trigger, alpha_st is the cost of instability acros
 
 ## Dataset
 
+### Scripts
+
+In the [`scripts/`](scripts) folder, you can find the different steps to:
+- Download recorded data and synthetic material.
+- Generate synthetic soundscapes
+- Reverberate synthetic data (Not used in the baseline)
+- Separate sources of recorded and synthetic mixtures 
+
+### Missing files (recorded data)
+**It is likely that you'll have download issues with the real recordings.
+At the end of the download, please send a mail with the TSV files
+created in the `missing_files` directory.** (in priority to Nicolas Turpault and Romain Serizel)
+
+However, if none of the audio files have been downloaded, it is probably due to an internet, proxy problem.
+
+See [Desed repo][desed] or [Desed_website][desed_website] for more info.
+
 ### Description
 - The **sound event detection** dataset is using [desed] dataset.
-- To compute the reverberated data and the separated sources, we use [fuss_repo] 
-(included as `sound-separation/` here (using subtree))
-	- To compute the reverberated sounds, we use [fuss] rir_data and 
-	`sound-separation/datasets/fuss/reverberate_and_mix.py`
-	- To compute **sound separation**, we use [fuss] baseline model and 
+- To compute the separated sources, we use [fuss_repo] (included as `sound-separation/` here (using subtree))
+ 	- Specifically, we use [fuss] baseline model and 
 	`sound-separation/models/dcase2020_fuss_baseline/inference.py`
 
 ### Base dataset
 The dataset for sound event detection of DCASE2020 task 4 is composed of:
 - Train:
-	- *weak *(DESED, recorded)*
-	- *unlabel_in_domain *(DESED, recorded)*
-	- synthetic soundbank *(DESED, synthetic)*
-- *Validation (DESED, recorded):
-	- test2018
-	- eval2018
+	- *weak *(DESED, recorded, 1 578 files)*
+	- *unlabel_in_domain *(DESED, recorded, 14 412 files)*
+	- synthetic soundbank *(DESED, synthetic, 2 584 files)*
+- *Validation (DESED, recorded, 1 168 files):
+	- test2018 (288 files)
+	- eval2018 (880 files)
 
 
-### Pre-computed synthetic data used to train baseline
+### Pre-computed data used to train baseline
 - Train:
 	- synthetic20/soundscapes [2584 files] (DESED) --> base files, not used to train baseline
 	- *synthetic20/separated_sources [2584 files] (DESED) --> base files, not used to train baseline
@@ -127,22 +141,6 @@ The dataset for sound event detection of DCASE2020 task 4 is composed of:
 
 *Note: the reverberated data are not computed for the baseline*
 
-## Scripts
-
-In the [`scripts/`](scripts) folder, you can find the different steps to generate:
-- Synthetic soundscapes
-- Reverberated synthetic data (Not used in the baseline)
-- Separated sources of recorded and synthetic mixtures 
-
-	
-### DESED Dataset
-**It is likely that you'll have download issues with the real recordings.
-At the end of the download, please send a mail with the TSV files
-created in the `missing_files` directory.** (in priority to Nicolas Turpault and Romain Serizel)
-
-However, if none of the audio files have been downloaded, it is probably due to an internet, proxy problem.
-
-See [Desed repo][desed] or [Desed_website][desed_website] for more info.
 
 ### Annotation format
 
