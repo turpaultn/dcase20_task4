@@ -28,7 +28,9 @@ git subtree.
 
 ### Source separation model
 
-More info in [FUSS model repo][fuss-repo-model].
+More info in [Original FUSS model repo][fuss-repo-model].
+
+
 
 ### SED model
 
@@ -36,10 +38,10 @@ More info in the [baseline] folder.
 
 ### Results
 
-System performance are reported in term of event-based F-scores [[1]][1] 
+System performance are reported in term of event-based F-scores [[1]] 
 with a 200ms collar on onsets and a 200ms / 20% of the events length collar on offsets. 
 
-Additionally, the PSDS [[2]][2] performance are reported. 
+Additionally, the PSDS [[2]] performance are reported. 
 
 <table class="table table-striped">
  <thead>
@@ -73,7 +75,7 @@ Additionally, the PSDS [[2]][2] performance are reported.
  </tbody>
  </table>
 
-Please refer to the PSDS paper [[2]][2] for more information about it.
+Please refer to the PSDS paper [[2]] for more information about it.
 The parameters used for psds performances are:
 - Detection Tolerance parameter (dtc): 0.5
 - Ground Truth intersection parameter (gtc): 0.5
@@ -190,9 +192,9 @@ If you have any contact feel free to contact [Nicolas](mailto:nicolas.turpault@i
 
 ## References
 
-- [[1]][1] A. Mesaros, T. Heittola, & T. Virtanen, "Metrics for polyphonic sound event detection", 
+- [[1]] A. Mesaros, T. Heittola, & T. Virtanen, "Metrics for polyphonic sound event detection", 
 Applied Sciences, 6(6):162, 2016
-- [[2]][2] C. Bilen, G. Ferroni, F. Tuveri, J. Azcarreta, S. Krstulovic, 
+- [[2]] C. Bilen, G. Ferroni, F. Tuveri, J. Azcarreta, S. Krstulovic, 
 A Framework for the Robust Evaluation of Sound Event Detection.
 
 [1]: http://dcase.community/documents/challenge2019/technical_reports/DCASE2019_Delphin_15.pdf
