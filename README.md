@@ -9,6 +9,7 @@
 - 9th March 2020: update `scripts` to get the recorded data in the download.
 - 18th March 2020: update the `DESED_synth_dcase20_train_jams.tar`on [DESED_synthetic][synthetic_dataset] 
 and comment reverb since we do not use it for the baseline.
+- 24th March 2020: release baseline without sound-separation
 
 ## Dependencies
 
@@ -44,13 +45,14 @@ Additionally, the PSDS [[2]][2] performance are reported.
  <thead>
  <tr>
  <td></td>
- <td colspan="3">Baseline without sound separation</td>
+ <td colspan="1">Baseline without sound separation</td>
+  <td colspan="1">Baseline with sound separation</td>
  </tr>
  </thead>
  <tbody>
  <tr>
  <td></td>
- <td><strong>Validation</strong></td>
+ <td> Validation </td>
  </tr>
  <tr>
  <td><strong>Event-based</strong></td>
