@@ -9,6 +9,7 @@
 - 9th March 2020: update `scripts` to get the recorded data in the download.
 - 18th March 2020: update the `DESED_synth_dcase20_train_jams.tar`on [DESED_synthetic][synthetic_dataset] 
 and comment reverb since we do not use it for the baseline.
+- 24th March 2020: release baseline without sound-separation
 
 ## Dependencies
 
@@ -27,7 +28,9 @@ git subtree.
 
 ### Source separation model
 
-More info in [FUSS model repo][fuss-repo-model].
+More info in [Original FUSS model repo][fuss-repo-model].
+
+
 
 ### SED model
 
@@ -35,22 +38,23 @@ More info in the [baseline] folder.
 
 ### Results
 
-System performance are reported in term of event-based F-scores [[1]][1] 
+System performance are reported in term of event-based F-scores [[1]] 
 with a 200ms collar on onsets and a 200ms / 20% of the events length collar on offsets. 
 
-Additionally, the PSDS [[2]][2] performance are reported. 
+Additionally, the PSDS [[2]] performance are reported. 
 
 <table class="table table-striped">
  <thead>
  <tr>
  <td></td>
- <td colspan="3">Baseline without sound separation</td>
+ <td colspan="1">Baseline without sound separation</td>
+  <td colspan="1">Baseline with sound separation</td>
  </tr>
  </thead>
  <tbody>
  <tr>
  <td></td>
- <td><strong>Validation</strong></td>
+ <td> Validation </td>
  </tr>
  <tr>
  <td><strong>Event-based</strong></td>
@@ -71,7 +75,7 @@ Additionally, the PSDS [[2]][2] performance are reported.
  </tbody>
  </table>
 
-Please refer to the PSDS paper [[2]][2] for more information about it.
+Please refer to the PSDS paper [[2]] for more information about it.
 The parameters used for psds performances are:
 - Detection Tolerance parameter (dtc): 0.5
 - Ground Truth intersection parameter (gtc): 0.5
@@ -90,27 +94,41 @@ alpha_ct is the cost of cross-trigger, alpha_st is the cost of instability acros
 
 ## Dataset
 
+### Scripts
+
+In the [`scripts/`](scripts) folder, you can find the different steps to:
+- Download recorded data and synthetic material.
+- Generate synthetic soundscapes
+- Reverberate synthetic data (Not used in the baseline)
+- Separate sources of recorded and synthetic mixtures 
+
+### Missing files (recorded data)
+**It is likely that you'll have download issues with the real recordings.
+At the end of the download, please send a mail with the TSV files
+created in the `missing_files` directory.** (in priority to Nicolas Turpault and Romain Serizel)
+
+However, if none of the audio files have been downloaded, it is probably due to an internet, proxy problem.
+
+See [Desed repo][desed] or [Desed_website][desed_website] for more info.
+
 ### Description
 - The **sound event detection** dataset is using [desed] dataset.
-- To compute the reverberated data and the separated sources, we use [fuss_repo] 
-(included as `sound-separation/` here (using subtree))
-	- To compute the reverberated sounds, we use [fuss] rir_data and 
-	`sound-separation/datasets/fuss/reverberate_and_mix.py`
-	- To compute **sound separation**, we use [fuss] baseline model and 
+- To compute the separated sources, we use [fuss_repo] (included as `sound-separation/` here (using subtree))
+ 	- Specifically, we use [fuss] baseline model and 
 	`sound-separation/models/dcase2020_fuss_baseline/inference.py`
 
 ### Base dataset
 The dataset for sound event detection of DCASE2020 task 4 is composed of:
 - Train:
-	- *weak *(DESED, recorded)*
-	- *unlabel_in_domain *(DESED, recorded)*
-	- synthetic soundbank *(DESED, synthetic)*
-- *Validation (DESED, recorded):
-	- test2018
-	- eval2018
+	- *weak *(DESED, recorded, 1 578 files)*
+	- *unlabel_in_domain *(DESED, recorded, 14 412 files)*
+	- synthetic soundbank *(DESED, synthetic, 2 584 files)*
+- *Validation (DESED, recorded, 1 168 files):
+	- test2018 (288 files)
+	- eval2018 (880 files)
 
 
-### Pre-computed synthetic data used to train baseline
+### Pre-computed data used to train baseline
 - Train:
 	- synthetic20/soundscapes [2584 files] (DESED) --> base files, not used to train baseline
 	- *synthetic20/separated_sources [2584 files] (DESED) --> base files, not used to train baseline
@@ -123,22 +141,6 @@ The dataset for sound event detection of DCASE2020 task 4 is composed of:
 
 *Note: the reverberated data are not computed for the baseline*
 
-## Scripts
-
-In the [`scripts/`](scripts) folder, you can find the different steps to generate:
-- Synthetic soundscapes
-- Reverberated synthetic data (Not used in the baseline)
-- Separated sources of recorded and synthetic mixtures 
-
-	
-### DESED Dataset
-**It is likely that you'll have download issues with the real recordings.
-At the end of the download, please send a mail with the TSV files
-created in the `missing_files` directory.** (in priority to Nicolas Turpault and Romain Serizel)
-
-However, if none of the audio files have been downloaded, it is probably due to an internet, proxy problem.
-
-See [Desed repo][desed] or [Desed_website][desed_website] for more info.
 
 ### Annotation format
 
@@ -188,9 +190,9 @@ If you have any contact feel free to contact [Nicolas](mailto:nicolas.turpault@i
 
 ## References
 
-- [[1]][1] A. Mesaros, T. Heittola, & T. Virtanen, "Metrics for polyphonic sound event detection", 
+- [[1]] A. Mesaros, T. Heittola, & T. Virtanen, "Metrics for polyphonic sound event detection", 
 Applied Sciences, 6(6):162, 2016
-- [[2]][2] C. Bilen, G. Ferroni, F. Tuveri, J. Azcarreta, S. Krstulovic, 
+- [[2]] C. Bilen, G. Ferroni, F. Tuveri, J. Azcarreta, S. Krstulovic, 
 A Framework for the Robust Evaluation of Sound Event Detection.
 
 [1]: http://dcase.community/documents/challenge2019/technical_reports/DCASE2019_Delphin_15.pdf

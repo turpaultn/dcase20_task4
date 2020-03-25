@@ -25,4 +25,4 @@ These data are used to train the baseline using Source separation.
 [desed_website]: https://project.inria.fr/desed/dcase-challenge/dcase-2020-task-4/
 [FUSS]: https://zenodo.org/record/3694384/
 
-[readme_repo]: ../README.md
+[readme_repo]: ../
