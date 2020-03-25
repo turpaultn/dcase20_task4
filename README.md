@@ -14,11 +14,79 @@ and comment reverb since we do not use it for the baseline.
 
 Python >= 3.6, pytorch >= 1.0, cudatoolkit=9.0, pandas >= 0.24.1, scipy >= 1.2.1, pysoundfile >= 0.10.2,
 scaper >= 1.3.5, librosa >= 0.6.3, youtube-dl >= 2019.4.30, tqdm >= 4.31.1, ffmpeg >= 4.1, 
-dcase_util >= 0.2.5, sed-eval >= 0.2.1
+dcase_util >= 0.2.5, sed-eval >= 0.2.1, psds-eval >= 0.0.1, desed >= 1.1.7
 
-A simplified installation procedure example is provide below for python 3.6 based Anconda distribution for Linux based system:
+A simplified installation procedure example is provided below for python 3.6 based Anconda distribution for Linux based system:
 1. [install Ananconda][anaconda_download]
 2. launch `conda_create_environment.sh` (recommended line by line)
+
+## Baseline
+
+This year, a **sound separation** model is used: see [sound-separation] folder which is the [fuss_repo] integrated as a 
+git subtree.
+
+### Source separation model
+
+More info in [FUSS model repo][fuss-repo-model].
+
+### SED model
+
+More info in the [baseline] folder.
+
+### Results
+
+System performance are reported in term of event-based F-scores [[1]][1] 
+with a 200ms collar on onsets and a 200ms / 20% of the events length collar on offsets. 
+
+Additionally, the PSDS [[2]][2] performance are reported. 
+
+<table class="table table-striped">
+ <thead>
+ <tr>
+ <td></td>
+ <td colspan="3">Baseline without sound separation</td>
+ </tr>
+ </thead>
+ <tbody>
+ <tr>
+ <td></td>
+ <td><strong>Validation</strong></td>
+ </tr>
+ <tr>
+ <td><strong>Event-based</strong></td>
+ <td><strong> 33.05 %</strong></td>
+ </tr>
+ <tr>
+ <td>PSDS </td>
+ <td> 0.403 </td>
+ </tr>
+ <tr>
+ <td>PSDS cross-trigger</td>
+ <td> 0.234 </td>
+ </tr>
+ <tr>
+ <td>PSDS macro</td>
+ <td> 0.199 </td>
+ </tr>
+ </tbody>
+ </table>
+
+Please refer to the PSDS paper [[2]][2] for more information about it.
+The parameters used for psds performances are:
+- Detection Tolerance parameter (dtc): 0.5
+- Ground Truth intersection parameter (gtc): 0.5
+- Cross-Trigger Tolerance parameter (cttc): 0.3
+- maximum False Positive rate (e_max): 100
+
+The difference between the 3 performances reported:
+
+|                       | alpha_ct  | alpha_st  |
+|-----------------------|----------:|----------:|
+| PSDS                  | 0         | 0         |
+| PSDS cross-trigger    | 1         | 0         |
+| PSDS macro            | 0         | 1         |
+
+alpha_ct is the cost of cross-trigger, alpha_st is the cost of instability across classes.
 
 ## Dataset
 
@@ -28,7 +96,7 @@ A simplified installation procedure example is provide below for python 3.6 base
 (included as `sound-separation/` here (using subtree))
 	- To compute the reverberated sounds, we use [fuss] rir_data and 
 	`sound-separation/datasets/fuss/reverberate_and_mix.py`
-	- To compute **source separation**, we use [fuss] baseline model and 
+	- To compute **sound separation**, we use [fuss] baseline model and 
 	`sound-separation/models/dcase2020_fuss_baseline/inference.py`
 
 ### Base dataset
@@ -51,7 +119,7 @@ The dataset for sound event detection of DCASE2020 task 4 is composed of:
 - Validation
 	- *validation_ss/separated_sources [1168 files] (uses [fuss] baseline_model and [fuss_scripts])
 
-* Only used in baseline with source separation
+* Only used in baseline with sound separation
 
 *Note: the reverberated data are not computed for the baseline*
 
@@ -120,24 +188,13 @@ If you have any contact feel free to contact [Nicolas](mailto:nicolas.turpault@i
 
 ## References
 
-- [1] F. Font, G. Roma & X. Serra. Freesound technical demo. In Proceedings of the 21st ACM international conference on Multimedia. ACM, 2013.
-- [2] E. Fonseca, J. Pons, X. Favory, F. Font, D. Bogdanov, A. Ferraro, S. Oramas, A. Porter & X. Serra. Freesound Datasets: A Platform for the Creation of Open Audio Datasets.
-In Proceedings of the 18th International Society for Music Information Retrieval Conference, Suzhou, China, 2017.
+- [[1]][1] A. Mesaros, T. Heittola, & T. Virtanen, "Metrics for polyphonic sound event detection", 
+Applied Sciences, 6(6):162, 2016
+- [[2]][2] C. Bilen, G. Ferroni, F. Tuveri, J. Azcarreta, S. Krstulovic, 
+A Framework for the Robust Evaluation of Sound Event Detection.
 
-- [3] Jort F. Gemmeke and Daniel P. W. Ellis and Dylan Freedman and Aren Jansen and Wade Lawrence and R. Channing Moore and Manoj Plakal and Marvin Ritter.
-Audio Set: An ontology and human-labeled dataset for audio events.
-In Proceedings IEEE ICASSP 2017, New Orleans, LA, 2017.
-
-- [4] Gert Dekkers, Steven Lauwereins, Bart Thoen, Mulu Weldegebreal Adhana, Henk Brouckxon, Toon van Waterschoot, Bart Vanrumste, Marian Verhelst, and Peter Karsmakers.
-The SINS database for detection of daily activities in a home environment using an acoustic sensor network.
-In Proceedings of the Detection and Classification of Acoustic Scenes and Events 2017 Workshop (DCASE2017), 32–36. November 2017.
-
-- [5] J. Salamon, D. MacConnell, M. Cartwright, P. Li, and J. P. Bello. Scaper: A library for soundscape synthesis and augmentation
-In IEEE Workshop on Applications of Signal Processing to Audio and Acoustics (WASPAA), New Paltz, NY, USA, Oct. 2017.
-
-- [6] Romain Serizel, Nicolas Turpault. 
-Sound Event Detection from Partially Annotated Data: Trends and Challenges. 
-IcETRAN conference, Srebrno Jezero, Serbia, June 2019.
+[1]: http://dcase.community/documents/challenge2019/technical_reports/DCASE2019_Delphin_15.pdf
+[2]: https://arxiv.org/pdf/1910.08440.pdf
 
 [anaconda_download]: https://www.anaconda.com/download/
 [Audioset]: https://research.google.com/audioset/index.html
@@ -151,9 +208,14 @@ IcETRAN conference, Srebrno Jezero, Serbia, June 2019.
 [FSD]: https://datasets.freesound.org/fsd/
 [fuss]: https://zenodo.org/record/3694384/
 [fuss_repo]: https://github.com/google-research/sound-separation
+[fuss-repo-model]: https://github.com/google-research/sound-separation/tree/master/models/dcase2020_fuss_baseline
 [fuss_scripts]: https://github.com/google-research/sound-separation/tree/master/datasets/fuss
 [paper2019-description]: https://hal.inria.fr/hal-02160855
 [paper2019-eval]: https://hal.inria.fr/hal-02355573
+[paper-psds]: https://arxiv.org/pdf/1910.08440.pdf
 [Scaper]: https://github.com/justinsalamon/scaper
 [synthetic_dataset]: https://zenodo.org/record/3702397
 [website]: http://dcase.community/challenge2020/
+
+[sound-separation]: ./sound-separation
+[baseline]: ./baseline
