@@ -1,19 +1,27 @@
-## Baseline
+# Baseline
 
 See in config.py the different paths if you want to modify them for your own data.
 
-### Train SED model without source separation
+## Train SED model without source separation
 
 - `python main.py`
 
-### Train SED model with separated sources already extracted
+## Train SED model with separated sources already extracted
 
 Make sure you extracted the separated sources with the FUSS model (see [4_separate_mixtures.sh])
 
 - `python main.py -ss`
 
+## Reproducing results
+The performance might not be exactly reproducible on a GPU based system.
+That is why, you can download the [weights of the networks][model-weights]
+used for the experiments and run `TestModel.py --model_path="Path_of_model" ` to reproduce the results.
 
-### System description
+**Note**: the SED+SS model is coming soon...
+
+## System description
+
+### SED model
 The baseline model is inspired by last year 2nd best submission system of DCASE 2019 task 4:
 L. Delphin-Poulat & C. Plapous [[1]].
 
@@ -29,12 +37,14 @@ The main differences of the baseline system (without source separation) compared
 - Median window of 0.45s.
 - Early stopping (10 epochs).
 
+### SED + SS model
 
-**Note:** The performance might not be exactly reproducible on a GPU based system.
-That is why, you can download the [weights of the networks][model-weights]
-used for the experiments and run `TestModel.py --model_path="Path_of_model" ` to reproduce the results.
+Uses 5 channels instead of 1:
+- The first channel is the mixture (like the SED model)
+- The 4 other channels are the separated mixtures
 
-### References
+
+## References
  - [[1]] L. Delphin-Poulat & C. Plapous, technical report, dcase 2019.
  - [[2]]  Tarvainen, A. and Valpola, H., 2017.
  Mean teachers are better role models: Weight-averaged consistency targets improve semi-supervised deep learning results.

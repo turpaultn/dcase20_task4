@@ -30,8 +30,6 @@ git subtree.
 
 More info in [Original FUSS model repo][fuss-repo-model].
 
-
-
 ### SED model
 
 More info in the [baseline] folder.
@@ -94,7 +92,7 @@ alpha_ct is the cost of cross-trigger, alpha_st is the cost of instability acros
 
 ## Dataset
 
-### Scripts
+### Scripts to generate the dataset
 
 In the [`scripts/`](scripts) folder, you can find the different steps to:
 - Download recorded data and synthetic material.
@@ -102,13 +100,12 @@ In the [`scripts/`](scripts) folder, you can find the different steps to:
 - Reverberate synthetic data (Not used in the baseline)
 - Separate sources of recorded and synthetic mixtures 
 
-### Missing files (recorded data)
+
 **It is likely that you'll have download issues with the real recordings.
 At the end of the download, please send a mail with the TSV files
-created in the `missing_files` directory.** (in priority to Nicolas Turpault and Romain Serizel)
+created in the `missing_files` directory.** ([to Nicolas Turpault and Romain Serizel](#contact)).
 
 However, if none of the audio files have been downloaded, it is probably due to an internet, proxy problem.
-
 See [Desed repo][desed] or [Desed_website][desed_website] for more info.
 
 ### Description
@@ -117,7 +114,7 @@ See [Desed repo][desed] or [Desed_website][desed_website] for more info.
  	- Specifically, we use [fuss] baseline model and 
 	`sound-separation/models/dcase2020_fuss_baseline/inference.py`
 
-### Base dataset
+#### Base dataset
 The dataset for sound event detection of DCASE2020 task 4 is composed of:
 - Train:
 	- *weak *(DESED, recorded, 1 578 files)*
@@ -127,20 +124,33 @@ The dataset for sound event detection of DCASE2020 task 4 is composed of:
 	- test2018 (288 files)
 	- eval2018 (880 files)
 
-
-### Pre-computed data used to train baseline
+#### Pre-computed data used to train baseline
 - Train:
-	- synthetic20/soundscapes [2584 files] (DESED) --> base files, not used to train baseline
-	- *synthetic20/separated_sources [2584 files] (DESED) --> base files, not used to train baseline
-	- *weak_ss/separated_sources [1578 folders] (uses [fuss] baseline_model and [fuss_scripts])
-	- *unlabel_in_domain_ss/separated_sources [14 412 folders] (uses [fuss] baseline_model and [fuss_scripts])
+	- synthetic20/soundscapes [2584 files] (DESED)
+	- synthetic20/separated_sources [2584 files] (DESED)
+	- weak_ss/separated_sources [1578 folders] (uses [fuss] baseline_model and [fuss_scripts])
+	- unlabel_in_domain_ss/separated_sources [14 412 folders] (uses [fuss] baseline_model and [fuss_scripts])
 - Validation
-	- *validation_ss/separated_sources [1168 files] (uses [fuss] baseline_model and [fuss_scripts])
+	- validation_ss/separated_sources [1168 files] (uses [fuss] baseline_model and [fuss_scripts])
 
-* Only used in baseline with sound separation
+*Note: the reverberated data (see [scripts](#scripts-to-generate-the-dataset)) are not computed for the baseline*
 
-*Note: the reverberated data are not computed for the baseline*
+#### Baselines dataset
+##### SED baseline
+- Train:
+	- weak
+	- unlabel_in_domain
+	- synthetic20/soundscapes (separated in train/valid-80%/20%)
+- Validation:
+	- validation
 
+##### SED + SS baseline
+- Train:
+	- weak + weak_ss/separated_sources
+	- unlabel_in_domain + unlabel_in_domain_ss/separated_sources
+	- synthetic20/soundscapes + synthetic20/separated_sources
+- Validation:
+	- validation + validation_ss/separated_sources
 
 ### Annotation format
 
@@ -171,6 +181,7 @@ For example:
 YOTsn73eqbfc_10.000_20.000.wav	0.163	0.665	Alarm_bell_ringing
 ```
 
+
 ## Authors
 
 |Author                 | Affiliation               |
@@ -185,7 +196,7 @@ YOTsn73eqbfc_10.000_20.000.wav	0.163	0.665	Alarm_bell_ringing
 |Prem Seetharaman       | Northwestern University   |
 
 ## Contact
-If you have any contact feel free to contact [Nicolas](mailto:nicolas.turpault@inria.fr) 
+If you have any problem feel free to contact [Nicolas](mailto:nicolas.turpault@inria.fr) 
 (and [Romain](mailto:romain.serizel@loria.fr) )
 
 ## References
