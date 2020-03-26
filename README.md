@@ -17,7 +17,8 @@ Python >= 3.6, pytorch >= 1.0, cudatoolkit=9.0, pandas >= 0.24.1, scipy >= 1.2.1
 scaper >= 1.3.5, librosa >= 0.6.3, youtube-dl >= 2019.4.30, tqdm >= 4.31.1, ffmpeg >= 4.1, 
 dcase_util >= 0.2.5, sed-eval >= 0.2.1, psds-eval >= 0.0.1, desed >= 1.1.7
 
-A simplified installation procedure example is provided below for python 3.6 based Anconda distribution for Linux based system:
+A simplified installation procedure example is provided below for python 3.6 based Anconda distribution 
+for Linux based system:
 1. [install Ananconda][anaconda_download]
 2. launch `conda_create_environment.sh` (recommended line by line)
 
@@ -94,7 +95,7 @@ alpha_ct is the cost of cross-trigger, alpha_st is the cost of instability acros
 
 ### Scripts to generate the dataset
 
-In the [`scripts/`](scripts) folder, you can find the different steps to:
+In the [`scripts/`][scripts] folder, you can find the different steps to:
 - Download recorded data and synthetic material.
 - Generate synthetic soundscapes
 - Reverberate synthetic data (Not used in the baseline)
@@ -169,7 +170,10 @@ Y-BJNMHMZDcU_50.000_60.000.wav	Alarm_bell_ringing,Dog
 #### Strong annotations
 Synthetic subset and validation set have strong annotations.
 
-The minimum length for an event is 250ms. The minimum duration of the pause between two events from the same class is 150ms. When the silence between two consecutive events from the same class was less than 150ms the events have been merged to a single event.
+The minimum length for an event is 250ms. The minimum duration of the pause between two events from the same class 
+is 150ms. 
+When the silence between two consecutive events from the same class was less than 150ms the events have been merged 
+to a single event.
 The strong annotations are provided in a tab separated csv file (.tsv) under the following format:
 
 ```
@@ -181,6 +185,22 @@ For example:
 YOTsn73eqbfc_10.000_20.000.wav	0.163	0.665	Alarm_bell_ringing
 ```
 
+## A word on sound separation dataset 
+#### [Free Universal Sound Separation (FUSS) Dataset][fuss]
+The free universal sound separation (FUSS) dataset [3] contains mixtures of arbitrary sources of different types 
+for use in training sound separation models. Each 10 second mixture contains between 1 and 4 sounds. 
+
+The source clips for the mixtures are from a prerelease of FSD50k [4], [5], which is composed of Freesound content 
+annotated with labels from the AudioSet Ontology. Using the FSD50k labels, the sound source files have been screened 
+such that they likely only contain a single type of sound. Labels are not provided for these sound source files, 
+and are not considered part of the challenge, although they will become available when FSD50k is released.
+
+
+Train:
+- 20000 mixtures
+
+Validation:
+- 1000 mixtures
 
 ## Authors
 
@@ -205,9 +225,20 @@ If you have any problem feel free to contact [Nicolas](mailto:nicolas.turpault@i
 Applied Sciences, 6(6):162, 2016
 - [[2]] C. Bilen, G. Ferroni, F. Tuveri, J. Azcarreta, S. Krstulovic, 
 A Framework for the Robust Evaluation of Sound Event Detection.
+- [[3]] Scott Wisdom, Hakan Erdogan, Daniel P. W. Ellis, Romain Serizel, Nicolas Turpault, Eduardo Fonseca, Justin Salamon, Prem Seetharaman, and John R. Hershey. 
+What's all the fuss about free universal sound separation data? In preparation. 2020.
+- [[4]] E. Fonseca, J. Pons, X. Favory, F. Font, D. Bogdanov, A. Ferraro, S. Oramas, A. Porter, and X. Serra.
+Freesound datasets: a platform for the creation of open audio datasets.
+In Proceedings of the 18th International Society for Music Information Retrieval Conference (ISMIR 2017), 486–493.
+Suzhou, China, 2017.
+- [[5]] F. Font, G. Roma, and X. Serra. Freesound technical demo.
 
+In Proceedings of the 21st ACM international conference on Multimedia, 411–412. ACM, 2013.
 [1]: http://dcase.community/documents/challenge2019/technical_reports/DCASE2019_Delphin_15.pdf
 [2]: https://arxiv.org/pdf/1910.08440.pdf
+[3]: ./
+[4]: https://repositori.upf.edu/bitstream/handle/10230/33299/fonseca_ismir17_freesound.pdf
+[5]: mtg.upf.edu/system/files/publications/Font-Roma-Serra-ACMM-2013.pdf
 
 [anaconda_download]: https://www.anaconda.com/download/
 [Audioset]: https://research.google.com/audioset/index.html
@@ -219,7 +250,7 @@ A Framework for the Robust Evaluation of Sound Event Detection.
 [desed_website]: https://project.inria.fr/desed/dcase-challenge/dcase-2020-task-4/
 [evaluation_dataset]: https://zenodo.org/record/3588172
 [FSD]: https://datasets.freesound.org/fsd/
-[fuss]: https://zenodo.org/record/3694384/
+[fuss]: https://zenodo.org/record/3710392/
 [fuss_repo]: https://github.com/google-research/sound-separation
 [fuss-repo-model]: https://github.com/google-research/sound-separation/tree/master/models/dcase2020_fuss_baseline
 [fuss_scripts]: https://github.com/google-research/sound-separation/tree/master/datasets/fuss
@@ -230,5 +261,6 @@ A Framework for the Robust Evaluation of Sound Event Detection.
 [synthetic_dataset]: https://zenodo.org/record/3702397
 [website]: http://dcase.community/challenge2020/
 
+[scripts]: ./scripts
 [sound-separation]: ./sound-separation
 [baseline]: ./baseline
