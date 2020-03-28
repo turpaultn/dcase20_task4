@@ -77,7 +77,7 @@ def test_model(state, gtruth_df, save_preds_path=None, median_win=None, add_axis
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("-m", '--model_path', type=str, required=True,
-                        help="Path of the ss_model to be evaluated")
+                        help="Path of the model to be evaluated")
     parser.add_argument("-g", '--groundtruth_tsv', type=str, required=True,
                         help="Path of the groundtruth tsv file")
 
