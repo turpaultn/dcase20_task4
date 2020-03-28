@@ -135,7 +135,7 @@ class DESED:
         return desed_obj
 
     def initialize_and_get_df(self, tsv_path, audio_dir=None, audio_dir_ss=None, pattern_ss=None,
-                              ext_ss_feature_file="_ss", nb_files=None, download=True):
+                              ext_ss_feature_file="_ss", nb_files=None, download=False):
         """ Initialize the dataset, extract the features dataframes
         Args:
             tsv_path: str, tsv path in the initial dataset
@@ -162,12 +162,12 @@ class DESED:
         subdir = osp.sep.join(fdir.split(osp.sep)[-2:])
         meta_feat_dir = osp.join(self.meta_feat_dir, subdir)
         feature_dir = osp.join(self.feature_dir, subdir)
+        logger.debug(feature_dir)
         os.makedirs(meta_feat_dir, exist_ok=True)
         os.makedirs(feature_dir, exist_ok=True)
 
         df_meta = self.get_df_from_meta(tsv_path, nb_files, pattern_ss=pattern_ss)
         logger.info(f"{tsv_path} Total file number: {len(df_meta.filename.unique())}")
-
         # Download real data
         if download:
             # Get only one filename once
