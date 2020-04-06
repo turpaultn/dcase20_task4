@@ -13,7 +13,8 @@ from psds_eval import PSDSEval
 
 import config as cfg
 from utilities.Logger import create_logger
-from utilities.utils import ManyHotEncoder, to_cuda_if_available
+from utilities.utils import to_cuda_if_available
+from utilities.ManyHotEncoder import ManyHotEncoder
 
 logger = create_logger(__name__, terminal_level=cfg.terminal_level)
 
@@ -114,52 +115,67 @@ def segment_based_evaluation_df(reference, estimated, time_resolution=1.):
 
 
 def get_predictions(model, valid_dataloader, decoder, pooling_time_ratio=1, median_window=1, save_predictions=None):
-    prediction_df = pd.DataFrame()
-    for i, ((input_data, _), indexes) in enumerate(valid_dataloader):
-        indexes = indexes.numpy()
-        input_data = to_cuda_if_available(input_data)
+    """ Get the predictions of a trained model on a specific set
+    Args:
+        model: torch.Module, a trained pytorch model (you usually want it to be in .eval() mode).
+        valid_dataloader: torch.utils.data.DataLoader, giving ((input_data, label), indexes) but label is not used here
+        decoder: function, takes a numpy.array of shape (n_labels, ) as input
+        pooling_time_ratio:
+        median_window:
+        save_predictions:
 
-        pred_strong, _ = model(input_data)
-        pred_strong = pred_strong.cpu()
-        pred_strong = pred_strong.detach().numpy()
-        if i == 0:
-            logger.debug(pred_strong)
+    Returns:
 
-        for j, pred_strong_it in enumerate(pred_strong):
-            pred_strong_it = ProbabilityEncoder().binarization(pred_strong_it, binarization_type="global_threshold",
-                                                               threshold=0.5)
-            pred_strong_it = scipy.ndimage.filters.median_filter(pred_strong_it, (median_window, 1))
-            pred = decoder(pred_strong_it)
-            pred = pd.DataFrame(pred, columns=["event_label", "onset", "offset"])
-            pred["filename"] = valid_dataloader.dataset.filenames.iloc[indexes[j]]
-            prediction_df = prediction_df.append(pred)
+    """
+    with torch.no_grad():
+        prediction_df = pd.DataFrame()
+        for i, ((input_data, _), indexes) in enumerate(valid_dataloader):
+            indexes = indexes.numpy()
+            input_data = to_cuda_if_available(input_data)
 
-            if i == 0 and j == 0:
-                logger.debug("predictions: \n{}".format(pred))
-                logger.debug("predictions strong: \n{}".format(pred_strong_it))
+            pred_strong, _ = model(input_data)
+            pred_strong = pred_strong.cpu()
+            pred_strong = pred_strong.detach().numpy()
+            if i == 0:
+                logger.debug(pred_strong)
 
-    # In seconds
-    prediction_df.loc[:, "onset"] = prediction_df.onset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_size)
-    prediction_df.loc[:, "offset"] = prediction_df.offset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_size)
-    prediction_df = prediction_df.reset_index(drop=True)
-    if save_predictions is not None:
-        dir_to_create = osp.dirname(save_predictions)
-        if dir_to_create != "":
-            os.makedirs(dir_to_create, exist_ok=True)
-        logger.info("Saving predictions at: {}".format(save_predictions))
-        prediction_df.to_csv(save_predictions, index=False, sep="\t", float_format="%.3f")
+            for j, pred_strong_it in enumerate(pred_strong):
+                pred_strong_it = ProbabilityEncoder().binarization(pred_strong_it, binarization_type="global_threshold",
+                                                                   threshold=0.5)
+                pred_strong_it = scipy.ndimage.filters.median_filter(pred_strong_it, (median_window, 1))
+                pred = decoder(pred_strong_it)
+                pred = pd.DataFrame(pred, columns=["event_label", "onset", "offset"])
+                pred["filename"] = valid_dataloader.dataset.filenames.iloc[indexes[j]]
+                prediction_df = prediction_df.append(pred)
+
+                if i == 0 and j == 0:
+                    logger.debug("predictions: \n{}".format(pred))
+                    logger.debug("predictions strong: \n{}".format(pred_strong_it))
+
+        # In seconds
+        prediction_df.loc[:, "onset"] = prediction_df.onset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_size)
+        prediction_df.loc[:, "offset"] = prediction_df.offset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_size)
+        prediction_df = prediction_df.reset_index(drop=True)
+        if save_predictions is not None:
+            dir_to_create = osp.dirname(save_predictions)
+            if dir_to_create != "":
+                os.makedirs(dir_to_create, exist_ok=True)
+            logger.info("Saving predictions at: {}".format(save_predictions))
+            prediction_df.to_csv(save_predictions, index=False, sep="\t", float_format="%.3f")
     return prediction_df
 
 
-def psds_results(predictions, gtruth_df, gtruth_durations):
-    try:
-        dtc_threshold = 0.5
-        gtc_threshold = 0.5
-        cttc_threshold = 0.3
-        # Instantiate PSDSEval
-        psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold,
-                        ground_truth=gtruth_df, metadata=gtruth_durations)
+def psds_add_predictions(psds, predictions):
+    """ add operating points to PSDSEval object and compute metrics
 
+    Args:
+        psds: psds.PSDSEval object initialized with the groundtruth corresponding to the predictions
+        predictions: pd.DataFrame, containing predictions (columns: [filename, onset, offset, event_label]
+
+    Returns:
+        None
+    """
+    try:
         psds.add_operating_point(predictions)
         psds_score = psds.psds(alpha_ct=0, alpha_st=0, max_efpr=100)
         print(f"\nPSD-Score (0, 0, 100): {psds_score.value:.5f}")

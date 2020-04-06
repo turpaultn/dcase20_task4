@@ -16,14 +16,15 @@ from torch import nn
 from Desed import DESED
 from DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler
 from TestModel import _load_crnn
-from evaluation_measures import get_predictions, compute_sed_eval_metrics, psds_results
+from evaluation_measures import get_predictions, compute_sed_eval_metrics, psds_add_predictions
 from models.CRNN import CRNN
 import config as cfg
 from utilities import ramps
 from utilities.Logger import create_logger
 from utilities.Scaler import ScalerPerAudio, Scaler
-from utilities.utils import ManyHotEncoder, SaveBest, to_cuda_if_available, weights_init, \
+from utilities.utils import SaveBest, to_cuda_if_available, weights_init, \
     AverageMeterSet, EarlyStopping, get_durations_df
+from utilities.ManyHotEncoder import ManyHotEncoder
 from utilities.Transforms import get_transforms
 
 
@@ -380,7 +381,7 @@ if __name__ == '__main__':
         # Validation with synthetic data (dropping feature_filename for psds)
         valid_synth = dfs["valid_synthetic"].drop("feature_filename", axis=1)
         valid_events_metric = compute_sed_eval_metrics(predictions, valid_synth)
-        psds_results(predictions, valid_synth, durations_synth)
+        psds_add_predictions(predictions, valid_synth, durations_synth)
 
         # Update state
         state['model']['state_dict'] = crnn.state_dict()
@@ -420,27 +421,26 @@ if __name__ == '__main__':
     # ##############
     # Validation
     # ##############
-    with torch.no_grad():
-        crnn.eval()
-        transforms_valid = get_transforms(cfg.max_frames, scaler, add_axis_conv)
-        predicitons_fname = os.path.join(saved_pred_dir, "baseline_validation.tsv")
-        predicitons_fname18 = os.path.join(saved_pred_dir, "baseline_eval18.tsv")
+    crnn.eval()
+    transforms_valid = get_transforms(cfg.max_frames, scaler, add_axis_conv)
+    predicitons_fname = os.path.join(saved_pred_dir, "baseline_validation.tsv")
+    predicitons_fname18 = os.path.join(saved_pred_dir, "baseline_eval18.tsv")
 
-        validation_data = DataLoadDf(dfs["validation"], encod_func, transform=transforms_valid, return_indexes=True)
-        eval18_data = DataLoadDf(dfs["eval2018"], encod_func, transform=transforms_valid, return_indexes=True)
-        validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
+    validation_data = DataLoadDf(dfs["validation"], encod_func, transform=transforms_valid, return_indexes=True)
+    eval18_data = DataLoadDf(dfs["eval2018"], encod_func, transform=transforms_valid, return_indexes=True)
+    validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
 
-        valid_predictions = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
-                                            pooling_time_ratio, median_window=median_window,
-                                            save_predictions=predicitons_fname)
-        compute_sed_eval_metrics(valid_predictions, dfs["validation"])
-        validation_psds = dfs["validation"].drop("feature_filename", axis=1)
-        durations_validation = get_durations_df(cfg.validation, cfg.audio_validation_dir)
-        psds_results(valid_predictions, validation_psds, durations_validation)
+    valid_predictions = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
+                                        pooling_time_ratio, median_window=median_window,
+                                        save_predictions=predicitons_fname)
+    compute_sed_eval_metrics(valid_predictions, dfs["validation"])
+    validation_psds = dfs["validation"].drop("feature_filename", axis=1)
+    durations_validation = get_durations_df(cfg.validation, cfg.audio_validation_dir)
+    psds_add_predictions(valid_predictions, validation_psds, durations_validation)
 
-        # Eval 2018
-        eval18_dataloader = DataLoader(eval18_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
-        eval18_predictions = get_predictions(crnn, eval18_dataloader, many_hot_encoder.decode_strong,
-                                             pooling_time_ratio, median_window=median_window,
-                                             save_predictions=predicitons_fname18)
-        compute_sed_eval_metrics(eval18_predictions, dfs["eval2018"])
+    # Eval 2018
+    eval18_dataloader = DataLoader(eval18_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
+    eval18_predictions = get_predictions(crnn, eval18_dataloader, many_hot_encoder.decode_strong,
+                                         pooling_time_ratio, median_window=median_window,
+                                         save_predictions=predicitons_fname18)
+    compute_sed_eval_metrics(eval18_predictions, dfs["eval2018"])

@@ -3,15 +3,17 @@ import argparse
 import os
 
 import torch
+from psds_eval import PSDSEval
 from torch.utils.data import DataLoader
 import pandas as pd
 
 from DataLoad import DataLoadDf
 from Desed import DESED
 from evaluation_measures import compute_sed_eval_metrics, get_predictions, \
-    psds_results
-from utilities.utils import ManyHotEncoder, to_cuda_if_available, generate_tsv_wav_durations, \
+    psds_add_predictions
+from utilities.utils import to_cuda_if_available, generate_tsv_wav_durations, \
     meta_path_to_audio_dir
+from utilities.ManyHotEncoder import ManyHotEncoder
 from utilities.Transforms import get_transforms
 from utilities.Logger import create_logger
 from utilities.Scaler import Scaler, ScalerPerAudio
@@ -22,11 +24,11 @@ logger = create_logger(__name__)
 torch.manual_seed(2020)
 
 
-def _load_crnn(state):
-    crnn_args = state["model"]["args"]
-    crnn_kwargs = state["model"]["kwargs"]
+def _load_crnn(state, model_name="model"):
+    crnn_args = state[model_name]["args"]
+    crnn_kwargs = state[model_name]["kwargs"]
     crnn = CRNN(*crnn_args, **crnn_kwargs)
-    crnn.load(parameters=state["model"]["state_dict"])
+    crnn.load(parameters=state[model_name]["state_dict"])
     crnn.eval()
     crnn = to_cuda_if_available(crnn)
     logger.info("Model loaded at epoch: {}".format(state["epoch"]))
@@ -59,17 +61,28 @@ def _get_predictions(state, strong_dataloader_ind, median_win=None, save_preds_p
     return predictions
 
 
-def test_model(state, gtruth_df, save_preds_path=None, median_win=None, add_axis_conv=True):
+def test_model(state, gtruth_df, save_preds_path=None, median_win=None):
     pred_df = gtruth_df.copy()
     # Define dataloader
     many_hot_encoder = ManyHotEncoder.load_state_dict(state["many_hot_encoder"])
     scaler = _load_scaler(state)
+    crnn = _load_crnn(state)
+    if crnn.n_in_channel == 1:
+        add_axis_conv = True
+    else:
+        add_axis_conv = False
     transforms_valid = get_transforms(cfg.max_frames, scaler=scaler, add_axis_conv=add_axis_conv)
 
     strong_dataload = DataLoadDf(pred_df, many_hot_encoder.encode_strong_df, transforms_valid, return_indexes=True)
     strong_dataloader_ind = DataLoader(strong_dataload, batch_size=cfg.batch_size, drop_last=False)
 
-    predictions = _get_predictions(state, strong_dataloader_ind, median_win=median_win, save_preds_path=save_preds_path)
+    pooling_time_ratio = state["pooling_time_ratio"]
+    many_hot_encoder = ManyHotEncoder.load_state_dict(state["many_hot_encoder"])
+    if median_win is None:
+        median_win = state["median_window"]
+    predictions = get_predictions(crnn, strong_dataloader_ind, many_hot_encoder.decode_strong, pooling_time_ratio,
+                                  median_window=median_win, save_predictions=save_preds_path)
+
     compute_sed_eval_metrics(predictions, gtruth_df)
     return predictions
 
@@ -130,26 +143,28 @@ if __name__ == '__main__':
     expe_state = torch.load(model_path, map_location="cpu")
     dataset = DESED(base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
                     compute_log=False)
+    dtc_threshold = 0.5
+    gtc_threshold = 0.5
+    cttc_threshold = 0.3
     if f_args.base_dir_ss is not None:
         groundtruth_df = dataset.initialize_and_get_df(f_args.groundtruth_tsv, gt_audio_dir, f_args.base_dir_ss,
                                                        pattern_ss="_events", nb_files=f_args.nb_files)
+        # Instantiate PSDSEval
+        psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold,
+                        ground_truth=groundtruth_df.drop("feature_filename", axis=1), metadata=meta_df)
 
         logger.info("\n #### Separated sources #### \n")
         pred_ss = test_model(expe_state, groundtruth_df, save_preds_path=f_args.save_predictions_path,
-                             median_win=median_window, add_axis_conv=False)
-        psds_results(
-            predictions=pred_ss,
-            gtruth_df=groundtruth_df.drop("feature_filename", axis=1),
-            gtruth_durations=meta_df
-        )
+                             median_win=median_window)
+        psds_add_predictions(psds=psds, predictions=pred_ss)
     else:
         groundtruth_df = dataset.initialize_and_get_df(f_args.groundtruth_tsv, gt_audio_dir, nb_files=f_args.nb_files)
+        psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold,
+                        ground_truth=groundtruth_df.drop("feature_filename", axis=1), metadata=meta_df)
+
         logger.info("\n #### Original files #### \n")
         pred_mixt = test_model(expe_state, groundtruth_df, save_preds_path=f_args.save_predictions_path,
                                median_win=median_window)
 
-        psds_results(
-            predictions=pred_mixt,
-            gtruth_df=groundtruth_df.drop("feature_filename", axis=1),
-            gtruth_durations=meta_df
-        )
+        psds_add_predictions(psds=psds, predictions=pred_mixt)
+
