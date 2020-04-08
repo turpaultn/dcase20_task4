@@ -31,7 +31,7 @@ class DataLoadDf(Dataset):
         return_indexes: bool, (Default value = False) whether or not to return indexes when use __getitem__
 
     Attributes:
-        df: pandas.DataFrame, the dataframe containing the set infromation (feat_filenames, labels, ...)
+        df: pandas.DataFrame, the dataframe containing the set information (feat_filenames, labels, ...)
         encode_function: function(), function which encode labels
         transform : function(), function to be applied to the sample (pytorch transformations)
         return_indexes: bool, whether or not to return indexes when use __getitem__

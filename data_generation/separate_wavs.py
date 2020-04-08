@@ -41,8 +41,10 @@ def read_audio(path, target_fs=None):
 def main(wav_files, model, out_folder, pattern_isolated_events="_events"):
     os.makedirs(out_folder, exist_ok=True)
 
-    for file in wav_files:
-        print(file)
+    for cnt, file in enumerate(wav_files):
+        if cnt % 500 == 0:
+            print(file)
+            print(f"{cnt}/{len(wav_files)}")
         waveform, sr = read_audio(file, 16000)
         separated_waveforms = model.separate(waveform)
         for cnt, sep_wav in enumerate(separated_waveforms):

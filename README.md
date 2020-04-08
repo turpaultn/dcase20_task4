@@ -10,12 +10,15 @@
 - 18th March 2020: update the `DESED_synth_dcase20_train_jams.tar`on [DESED_synthetic][synthetic_dataset] 
 and comment reverb since we do not use it for the baseline.
 - 24th March 2020: release baseline without sound-separation
+- 8th April 2020: update baseline without sound-separation. (common baseline, late integration).
+Rearrange the scripts download. Final metrics done. Test model on multiple operating points.
+Test model for sound-separation (late integration).
 
 ## Dependencies
 
-Python >= 3.6, pytorch >= 1.0, cudatoolkit=9.0, pandas >= 0.24.1, scipy >= 1.2.1, pysoundfile >= 0.10.2,
+Python >= 3.6, pytorch >= 1.0, cudatoolkit>=9.0, pandas >= 0.24.1, scipy >= 1.2.1, pysoundfile >= 0.10.2,
 scaper >= 1.3.5, librosa >= 0.6.3, youtube-dl >= 2019.4.30, tqdm >= 4.31.1, ffmpeg >= 4.1, 
-dcase_util >= 0.2.5, sed-eval >= 0.2.1, psds-eval >= 0.0.1, desed >= 1.1.7
+dcase_util >= 0.2.5, sed-eval >= 0.2.1, psds-eval >= 0.1.0, desed >= 1.1.7
 
 A simplified installation procedure example is provided below for python 3.6 based Anconda distribution 
 for Linux based system:
@@ -27,13 +30,20 @@ for Linux based system:
 This year, a **sound separation** model is used: see [sound-separation] folder which is the [fuss_repo] integrated as a 
 git subtree.
 
-### Source separation model
+### Sound separation model
 
 More info in [Original FUSS model repo][fuss-repo-model].
 
 ### SED model
 
 More info in the [baseline] folder.
+
+### Combination of sound separation (SS) and sound event detection (SED)
+
+The baseline to combine SS and SED is a late integration.
+This means, we reuse the SED baseline, and get predictions of:
+- The validation soundscapes
+- The separated sources of the validation soundscapes.
 
 ### Results
 
@@ -46,8 +56,8 @@ Additionally, the PSDS [[2]] performance are reported.
  <thead>
  <tr>
  <td></td>
- <td colspan="1">Baseline without sound separation</td>
-  <td colspan="1">Baseline with sound separation</td>
+ <td>Baseline without sound separation</td>
+  <td>Baseline with sound separation</td>
  </tr>
  </thead>
  <tbody>
@@ -57,19 +67,30 @@ Additionally, the PSDS [[2]] performance are reported.
  </tr>
  <tr>
  <td><strong>Event-based</strong></td>
- <td><strong> 33.05 %</strong></td>
+ <td><strong> 34.8 % </strong></td>
+ <td><strong> 35.6 % </strong></td>
+ <td rowspan=2 >Single prediction (threshold=0.5)</td>
+ </tr>
+ <tr>
+ <td><strong>PSDS macro F1</strong></td>
+ <td><strong> 60.0% </strong></td>
+ <td><strong> 60.5% </strong></td>
  </tr>
  <tr>
  <td>PSDS </td>
- <td> 0.403 </td>
+ <td> 0.610 </td>
+ <td> 0.626 </td>
+  <td rowspan=3 >Multiple predictions (50 thresholds)</td>
  </tr>
  <tr>
  <td>PSDS cross-trigger</td>
- <td> 0.234 </td>
+ <td> 0.524 </td>
+ <td> 0.546 </td>
  </tr>
  <tr>
  <td>PSDS macro</td>
- <td> 0.199 </td>
+ <td> 0.433 </td>
+ <td> 0.449 </td>
  </tr>
  </tbody>
  </table>
@@ -90,6 +111,9 @@ The difference between the 3 performances reported:
 | PSDS macro            | 0         | 1         |
 
 alpha_ct is the cost of cross-trigger, alpha_st is the cost of instability across classes.
+
+### Reproducing the results
+See [baseline] folder.
 
 ## Dataset
 
@@ -120,7 +144,7 @@ The dataset for sound event detection of DCASE2020 task 4 is composed of:
 - Train:
 	- *weak *(DESED, recorded, 1 578 files)*
 	- *unlabel_in_domain *(DESED, recorded, 14 412 files)*
-	- synthetic soundbank *(DESED, synthetic, 2 584 files)*
+	- synthetic soundbank *(DESED, synthetic, 2060 background (SINS only) + 1006 foreground files)*
 - *Validation (DESED, recorded, 1 168 files):
 	- test2018 (288 files)
 	- eval2018 (880 files)
@@ -146,10 +170,7 @@ The dataset for sound event detection of DCASE2020 task 4 is composed of:
 	- validation
 
 ##### SED + SS baseline
-- Train:
-	- weak + weak_ss/separated_sources
-	- unlabel_in_domain + unlabel_in_domain_ss/separated_sources
-	- synthetic20/soundscapes + synthetic20/separated_sources
+- No new training involved
 - Validation:
 	- validation + validation_ss/separated_sources
 
@@ -248,9 +269,9 @@ In Proceedings of the 21st ACM international conference on Multimedia, 411–412
 [dcase_website]: http://dcase.community/challenge2020/task-sound-event-detection-and-separation-in-domestic-environments
 [desed]: https://github.com/turpaultn/DESED
 [desed_website]: https://project.inria.fr/desed/dcase-challenge/dcase-2020-task-4/
-[evaluation_dataset]: https://zenodo.org/record/3588172
+[evaluation_dataset]: https://doi.org/10.5281/zenodo.3571049
 [FSD]: https://datasets.freesound.org/fsd/
-[fuss]: https://zenodo.org/record/3710392/
+[fuss]: https://doi.org/10.5281/zenodo.3694383
 [fuss_repo]: https://github.com/google-research/sound-separation
 [fuss-repo-model]: https://github.com/google-research/sound-separation/tree/master/models/dcase2020_fuss_baseline
 [fuss_scripts]: https://github.com/google-research/sound-separation/tree/master/datasets/fuss
@@ -258,7 +279,7 @@ In Proceedings of the 21st ACM international conference on Multimedia, 411–412
 [paper2019-eval]: https://hal.inria.fr/hal-02355573
 [paper-psds]: https://arxiv.org/pdf/1910.08440.pdf
 [Scaper]: https://github.com/justinsalamon/scaper
-[synthetic_dataset]: https://zenodo.org/record/3702397
+[synthetic_dataset]: https://doi.org/10.5281/zenodo.3550598
 [website]: http://dcase.community/challenge2020/
 
 [scripts]: ./scripts

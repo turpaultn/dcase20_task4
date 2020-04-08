@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+import functools
 import glob
+import multiprocessing
+from contextlib import closing
+
 import numpy as np
 import os
 import os.path as osp
@@ -9,6 +13,7 @@ import librosa
 import time
 import pandas as pd
 import desed
+from tqdm import tqdm
 
 import config as cfg
 from utilities.Logger import create_logger
@@ -135,7 +140,7 @@ class DESED:
         return desed_obj
 
     def initialize_and_get_df(self, tsv_path, audio_dir=None, audio_dir_ss=None, pattern_ss=None,
-                              ext_ss_feature_file="_ss", nb_files=None, download=True):
+                              ext_ss_feature_file="_ss", nb_files=None, download=False, keep_sources=None):
         """ Initialize the dataset, extract the features dataframes
         Args:
             tsv_path: str, tsv path in the initial dataset
@@ -146,28 +151,34 @@ class DESED:
             ext_ss_feature_file: str, only when audio_dir_ss is not None, what to add at the end of the feature files
             nb_files: int, optional, the number of file to take in the dataframe if taking a small part of the dataset.
             download: bool, optional, whether or not to download the data from the internet (youtube).
+            keep_sources: list, if sound_separation is used, it indicates which source is kept to create the features
 
         Returns:
             pd.DataFrame
             The dataframe containing the right features and labels
         """
-        # Parameters
-        if audio_dir_ss is not None and pattern_ss is None:
-            pattern_ss = "_events"
+        # Check parameters
+        if audio_dir_ss is not None:
+            assert osp.exists(audio_dir_ss), f"the directory of separated sources: {audio_dir_ss} does not exist, " \
+                f"cannot extract features from it"
+            if pattern_ss is None:
+                pattern_ss = "_events"
         if audio_dir is None:
             audio_dir = meta_path_to_audio_dir(tsv_path)
+        assert osp.exists(audio_dir), f"the directory {audio_dir} does not exist"
+
         # Path to save features, subdir, otherwise could have duplicate paths for synthetic data
         fdir = audio_dir if audio_dir_ss is None else audio_dir_ss
         fdir = fdir[:-1] if fdir.endswith(osp.sep) else fdir
         subdir = osp.sep.join(fdir.split(osp.sep)[-2:])
         meta_feat_dir = osp.join(self.meta_feat_dir, subdir)
         feature_dir = osp.join(self.feature_dir, subdir)
+        logger.debug(feature_dir)
         os.makedirs(meta_feat_dir, exist_ok=True)
         os.makedirs(feature_dir, exist_ok=True)
 
         df_meta = self.get_df_from_meta(tsv_path, nb_files, pattern_ss=pattern_ss)
         logger.info(f"{tsv_path} Total file number: {len(df_meta.filename.unique())}")
-
         # Download real data
         if download:
             # Get only one filename once
@@ -189,7 +200,7 @@ class DESED:
         logger.info(f"Getting features ...")
         df_features = self.extract_features_from_df(df_meta, audio_dir, feature_dir,
                                                     audio_dir_ss, pattern_ss,
-                                                    ext_ss_feature_file)
+                                                    ext_ss_feature_file, keep_sources)
         if len(df_features) != 0:
             df_features.to_csv(features_tsv, sep="\t", index=False)
             logger.info(f"features created/retrieved in {time.time() - t:.2f}s, metadata: {features_tsv}")
@@ -254,19 +265,49 @@ class DESED:
                 logger.error(e)
 
     def _extract_features_ss(self, wav_path, wav_paths_ss, out_path):
-        if not osp.exists(out_path):
-            try:
-                features = np.expand_dims(self.load_and_compute_mel_spec(wav_path), axis=0)
-                for wav_path_ss in wav_paths_ss:
-                    sep_features = np.expand_dims(self.load_and_compute_mel_spec(wav_path_ss), axis=0)
-                    features = np.concatenate((features, sep_features))
-                os.makedirs(osp.dirname(out_path), exist_ok=True)
-                np.save(out_path, features)
-            except IOError as e:
-                logger.error(e)
+        try:
+            features = np.expand_dims(self.load_and_compute_mel_spec(wav_path), axis=0)
+            for wav_path_ss in wav_paths_ss:
+                sep_features = np.expand_dims(self.load_and_compute_mel_spec(wav_path_ss), axis=0)
+                features = np.concatenate((features, sep_features))
+            os.makedirs(osp.dirname(out_path), exist_ok=True)
+            np.save(out_path, features)
+        except IOError as e:
+            logger.error(e)
+
+    def _extract_features_file(self, filename, audio_dir, feature_dir, audio_dir_ss=None, pattern_ss=None,
+                               ext_ss_feature_file="_ss", keep_sources=None):
+        wav_path = osp.join(audio_dir, filename)
+        if not osp.isfile(wav_path):
+            logger.error("File %s is in the tsv file but the feature is not extracted because "
+                         "file do not exist!" % wav_path)
+            out_path = None
+            # df_meta = df_meta.drop(df_meta[df_meta.filename == filename].index)
+        else:
+            if audio_dir_ss is None:
+                out_filename = osp.join(osp.splitext(filename)[0] + ".npy")
+                out_path = osp.join(feature_dir, out_filename)
+                self._extract_features(wav_path, out_path)
+            else:
+                # To be changed if you have new separated sounds from the same mixture
+                out_filename = osp.join(osp.splitext(filename)[0] + ext_ss_feature_file + ".npy")
+                out_path = osp.join(feature_dir, out_filename)
+                bname, ext = osp.splitext(filename)
+                if keep_sources is None:
+                    wav_paths_ss = glob.glob(osp.join(audio_dir_ss, bname + pattern_ss, "*" + ext))
+                else:
+                    wav_paths_ss = []
+                    for s_ind in keep_sources:
+                        audio_file = osp.join(audio_dir_ss, bname + pattern_ss, s_ind + ext)
+                        assert osp.exists(audio_file), f"Audio file does not exists: {audio_file}"
+                        wav_paths_ss.append(audio_file)
+                if not osp.exists(out_path):
+                    self._extract_features_ss(wav_path, wav_paths_ss, out_path)
+
+        return filename, out_path
 
     def extract_features_from_df(self, df_meta, audio_dir, feature_dir, audio_dir_ss=None, pattern_ss=None,
-                                 ext_ss_feature_file="_ss"):
+                                 ext_ss_feature_file="_ss", keep_sources=None):
         """Extract log mel spectrogram features.
 
         Args:
@@ -276,6 +317,7 @@ class DESED:
             audio_dir_ss: str, the path where to find the separated files (associated to the mixture)
             pattern_ss: str, the pattern following the normal filename to match the folder to find separated sources
             ext_ss_feature_file: str, only when audio_dir_ss is not None
+            keep_sources: list, the index of the sources to be kept if sound separation is used
 
         Returns:
             pd.DataFrame containing the initial meta + column with the "feature_filename"
@@ -285,29 +327,20 @@ class DESED:
 
         df_features = pd.DataFrame()
         fpaths = df_meta["filename"]
-        uniq_fpaths = fpaths.drop_duplicates()
+        uniq_fpaths = fpaths.drop_duplicates().to_list()
 
-        for ind, filename in enumerate(uniq_fpaths):
-            if ind % 500 == 0:
-                logger.debug(ind)
+        extract_file_func = functools.partial(self._extract_features_file,
+                                              audio_dir=audio_dir,
+                                              feature_dir=feature_dir,
+                                              audio_dir_ss=audio_dir_ss,
+                                              pattern_ss=pattern_ss,
+                                              ext_ss_feature_file=ext_ss_feature_file,
+                                              keep_sources=keep_sources)
 
-            wav_path = osp.join(audio_dir, filename)
-            if not osp.isfile(wav_path):
-                logger.error("File %s is in the tsv file but the feature is not extracted because "
-                             "file do not exist!" % wav_path)
-                df_meta = df_meta.drop(df_meta[df_meta.filename == filename].index)
-            else:
-                if audio_dir_ss is None:
-                    out_filename = osp.join(osp.splitext(filename)[0] + ".npy")
-                    out_path = osp.join(feature_dir, out_filename)
-                    self._extract_features(wav_path, out_path)
-                else:
-                    # To be changed if you have new separated sounds from the same mixture
-                    out_filename = osp.join(osp.splitext(filename)[0] + ext_ss_feature_file + ".npy")
-                    out_path = osp.join(feature_dir, out_filename)
-                    bname, ext = osp.splitext(filename)
-                    wav_paths_ss = glob.glob(osp.join(audio_dir_ss, bname + pattern_ss, "*" + ext))
-                    self._extract_features_ss(wav_path, wav_paths_ss, out_path)
+        n_jobs = multiprocessing.cpu_count() - 1
+        logger.info(f"Using {n_jobs} cpus")
+        with closing(multiprocessing.Pool(n_jobs)) as p:
+            for filename, out_path in tqdm(p.imap_unordered(extract_file_func, uniq_fpaths, 200), total=len(uniq_fpaths)):
                 row_features = df_meta[df_meta.filename == filename]
                 row_features.loc[:, "feature_filename"] = out_path
                 df_features = df_features.append(row_features, ignore_index=True)

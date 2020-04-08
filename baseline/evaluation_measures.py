@@ -9,11 +9,11 @@ import sed_eval
 import numpy as np
 import pandas as pd
 import torch
-from psds_eval import PSDSEval
 
 import config as cfg
 from utilities.Logger import create_logger
-from utilities.utils import ManyHotEncoder, to_cuda_if_available
+from utilities.utils import to_cuda_if_available
+from utilities.ManyHotEncoder import ManyHotEncoder
 
 logger = create_logger(__name__, terminal_level=cfg.terminal_level)
 
@@ -113,62 +113,107 @@ def segment_based_evaluation_df(reference, estimated, time_resolution=1.):
     return segment_based_metric
 
 
-def get_predictions(model, valid_dataloader, decoder, pooling_time_ratio=1, median_window=1, save_predictions=None):
-    prediction_df = pd.DataFrame()
-    for i, ((input_data, _), indexes) in enumerate(valid_dataloader):
+def get_predictions(model, dataloader, decoder, pooling_time_ratio=1, thresholds=[0.5],
+                    median_window=1, save_predictions=None):
+    """ Get the predictions of a trained model on a specific set
+    Args:
+        model: torch.Module, a trained pytorch model (you usually want it to be in .eval() mode).
+        dataloader: torch.utils.data.DataLoader, giving ((input_data, label), indexes) but label is not used here
+        decoder: function, takes a numpy.array of shape (time_steps, n_labels) as input and return a list of lists
+            of ("event_label", "onset", "offset") for each label predicted.
+        pooling_time_ratio: the division to make between timesteps as input and timesteps as output
+        median_window: int, the median window (in number of time steps) to be applied
+        save_predictions: str or list, the path of the base_filename to save the predictions or a list of names
+            corresponding for each thresholds
+        thresholds: list, list of threshold to be applied
+
+    Returns:
+        dict of the different predictions with associated threshold
+    """
+
+    # Init a dataframe per threshold
+    prediction_dfs = {}
+    for threshold in thresholds:
+        prediction_dfs[threshold] = pd.DataFrame()
+
+    # Get predictions
+    for i, ((input_data, _), indexes) in enumerate(dataloader):
         indexes = indexes.numpy()
         input_data = to_cuda_if_available(input_data)
-
-        pred_strong, _ = model(input_data)
+        with torch.no_grad():
+            pred_strong, _ = model(input_data)
         pred_strong = pred_strong.cpu()
         pred_strong = pred_strong.detach().numpy()
         if i == 0:
             logger.debug(pred_strong)
 
+        # Post processing and put predictions in a dataframe
         for j, pred_strong_it in enumerate(pred_strong):
-            pred_strong_it = ProbabilityEncoder().binarization(pred_strong_it, binarization_type="global_threshold",
-                                                               threshold=0.5)
-            pred_strong_it = scipy.ndimage.filters.median_filter(pred_strong_it, (median_window, 1))
-            pred = decoder(pred_strong_it)
-            pred = pd.DataFrame(pred, columns=["event_label", "onset", "offset"])
-            pred["filename"] = valid_dataloader.dataset.filenames.iloc[indexes[j]]
-            prediction_df = prediction_df.append(pred)
+            for threshold in thresholds:
+                pred_strong_bin = ProbabilityEncoder().binarization(pred_strong_it,
+                                                                    binarization_type="global_threshold",
+                                                                    threshold=threshold)
+                pred_strong_m = scipy.ndimage.filters.median_filter(pred_strong_bin, (median_window, 1))
+                pred = decoder(pred_strong_m)
+                pred = pd.DataFrame(pred, columns=["event_label", "onset", "offset"])
+                # Put them in seconds
+                pred.loc[:, ["onset", "offset"]] *= pooling_time_ratio / (cfg.sample_rate / cfg.hop_size)
+                pred.loc[:, ["onset", "offset"]] = pred[["onset", "offset"]].clip(0, cfg.max_len_seconds)
 
-            if i == 0 and j == 0:
-                logger.debug("predictions: \n{}".format(pred))
-                logger.debug("predictions strong: \n{}".format(pred_strong_it))
+                pred["filename"] = dataloader.dataset.filenames.iloc[indexes[j]]
+                prediction_dfs[threshold] = prediction_dfs[threshold].append(pred, ignore_index=True)
 
-    # In seconds
-    prediction_df.loc[:, "onset"] = prediction_df.onset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_size)
-    prediction_df.loc[:, "offset"] = prediction_df.offset * pooling_time_ratio / (cfg.sample_rate / cfg.hop_size)
-    prediction_df = prediction_df.reset_index(drop=True)
+                if i == 0 and j == 0:
+                    logger.debug("predictions: \n{}".format(pred))
+                    logger.debug("predictions strong: \n{}".format(pred_strong_it))
+
+    # Save predictions
     if save_predictions is not None:
-        dir_to_create = osp.dirname(save_predictions)
-        if dir_to_create != "":
-            os.makedirs(dir_to_create, exist_ok=True)
-        logger.info("Saving predictions at: {}".format(save_predictions))
-        prediction_df.to_csv(save_predictions, index=False, sep="\t", float_format="%.3f")
-    return prediction_df
+        if isinstance(save_predictions, str):
+            if len(thresholds) == 1:
+                save_predictions = [save_predictions]
+            else:
+                base, ext = osp.splitext(save_predictions)
+                save_predictions = [osp.join(base, f"{threshold:.3f}{ext}") for threshold in thresholds]
+        else:
+            assert len(save_predictions) == len(thresholds), \
+                f"There should be a prediction file per threshold: len predictions: {len(save_predictions)}\n" \
+                f"len thresholds: {len(thresholds)}"
+            save_predictions = save_predictions
+
+        for ind, threshold in enumerate(thresholds):
+            dir_to_create = osp.dirname(save_predictions[ind])
+            if dir_to_create != "":
+                os.makedirs(dir_to_create, exist_ok=True)
+                if ind % 10 == 0:
+                    logger.info(f"Saving predictions at: {save_predictions[ind]}. {ind + 1} / {len(thresholds)}")
+                prediction_dfs[threshold].to_csv(save_predictions[ind], index=False, sep="\t", float_format="%.3f")
+
+    list_predictions = []
+    for key in prediction_dfs:
+        list_predictions.append(prediction_dfs[key])
+
+    if len(list_predictions) == 1:
+        list_predictions = list_predictions[0]
+
+    return list_predictions
 
 
-def psds_results(predictions, gtruth_df, gtruth_durations):
+def psds_score(psds):
+    """ add operating points to PSDSEval object and compute metrics
+
+    Args:
+        psds: psds.PSDSEval object initialized with the groundtruth corresponding to the predictions
+    """
     try:
-        dtc_threshold = 0.5
-        gtc_threshold = 0.5
-        cttc_threshold = 0.3
-        # Instantiate PSDSEval
-        psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold,
-                        ground_truth=gtruth_df, metadata=gtruth_durations)
-
-        psds.add_operating_point(predictions)
         psds_score = psds.psds(alpha_ct=0, alpha_st=0, max_efpr=100)
         print(f"\nPSD-Score (0, 0, 100): {psds_score.value:.5f}")
-        psds_score = psds.psds(alpha_ct=1, alpha_st=0, max_efpr=100)
-        print(f"\nPSD-Score (1, 0, 100): {psds_score.value:.5f}")
-        psds_score = psds.psds(alpha_ct=0, alpha_st=1, max_efpr=100)
-        print(f"\nPSD-Score (0, 1, 100): {psds_score.value:.5f}")
+        psds_ct_score = psds.psds(alpha_ct=1, alpha_st=0, max_efpr=100)
+        print(f"\nPSD-Score (1, 0, 100): {psds_ct_score.value:.5f}")
+        psds_macro_score = psds.psds(alpha_ct=0, alpha_st=1, max_efpr=100)
+        print(f"\nPSD-Score (0, 1, 100): {psds_macro_score.value:.5f}")
     except psds_eval.psds.PSDSEvalError as e:
-        logger.error("psds did not work ....")
+        logger.error("psds score did not work ....")
         logger.error(e)
 
 

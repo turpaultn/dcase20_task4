@@ -7,7 +7,7 @@ DIR_PATH=..
 DIR_JAMS_DATASET=${DIR_PATH}/dataset
 JAMS_PATH=${DIR_JAMS_DATASET}/audio/train/synthetic20
 SOUNDBANK_PATH=${DIR_PATH}/synthetic/audio/train/soundbank
-OUT_AUDIO=${JAMS_PATH}
+OUT_AUDIO=${JAMS_PATH}/soundscapes
 
 SCRIPTS_PATH=../data_generation
 
