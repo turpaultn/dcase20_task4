@@ -218,22 +218,16 @@ if __name__ == '__main__':
 
     parser.add_argument("-n", '--no_synthetic', dest='no_synthetic', action='store_true', default=False,
                         help="Not using synthetic labels during training")
-    parser.add_argument("-ss", "--use_separated_sources", action="store_true", default=False,
-                        help="If using this option, make sure you config.py points to the right folders")
     f_args = parser.parse_args()
     pprint(vars(f_args))
 
     reduced_number_of_data = f_args.subpart_data
     no_synthetic = f_args.no_synthetic
-    use_separated_sources = f_args.use_separated_sources
 
     if no_synthetic:
         add_dir_model_name = "_no_synthetic"
     else:
         add_dir_model_name = "_with_synthetic"
-
-    if use_separated_sources:
-        add_dir_model_name += "_ss"
 
     store_dir = os.path.join("stored_data", "MeanTeacher" + add_dir_model_name)
     saved_model_dir = os.path.join(store_dir, "model")
@@ -242,13 +236,8 @@ if __name__ == '__main__':
     os.makedirs(saved_model_dir, exist_ok=True)
     os.makedirs(saved_pred_dir, exist_ok=True)
 
-    # Model and transform parameters different for source separated
-    if use_separated_sources:
-        n_channel = 5  # Should be changed if combine channels used
-        add_axis_conv = None
-    else:
-        n_channel = 1
-        add_axis_conv = 0
+    n_channel = 1
+    add_axis_conv = 0
 
     # Model taken from 2nd of dcase19 challenge: see Delphin-Poulat2019 in the results.
     n_layers = 7
@@ -269,7 +258,7 @@ if __name__ == '__main__':
     # ##############
     dataset = DESED(base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
                     compute_log=False)
-    dfs = get_dfs(dataset, reduced_number_of_data, separated_sources=use_separated_sources)
+    dfs = get_dfs(dataset, reduced_number_of_data)
 
     # Meta path for psds
     durations_synth = get_durations_df(cfg.synthetic)
@@ -381,8 +370,7 @@ if __name__ == '__main__':
                                       median_window=median_window, save_predictions=None)
         # Validation with synthetic data (dropping feature_filename for psds)
         valid_synth = dfs["valid_synthetic"].drop("feature_filename", axis=1)
-        valid_events_metric = compute_sed_eval_metrics(predictions, valid_synth)
-        psds_score(predictions, valid_synth, durations_synth)
+        valid_events_metric, psds_m_f1 = compute_metrics(predictions, valid_synth, durations_synth)
 
         # Update state
         state['model']['state_dict'] = crnn.state_dict()
