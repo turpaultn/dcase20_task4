@@ -6,13 +6,13 @@
 
 # Change paths by yours
 DIR_PATH=..
-SUBSET=eval  # The soundbank set to use (+ event_occurences values)
+SUBSET=train  # The soundbank set to use (+ event_occurences values)
 SOUNDBANK_PATH=${DIR_PATH}/synthetic/audio/${SUBSET}/soundbank
-OUT_PATH=${DIR_PATH}/dataset/audio/${SUBSET}/synthetic20_retry
+OUT_PATH=${DIR_PATH}/dataset/audio/${SUBSET}/synthetic20
 
 # These parameters should reproduce the dataset
 JSON_PATH=${DIR_PATH}/dataset/metadata/event_occurences/event_occurences_${SUBSET}.json
-NUMBER=1500
+NUMBER=5000
 NPROC=8         # Be careful, if you do not use the same number of processors, you won't reproduce the baseline data.
 ######## Under this line you should not have to change anything ###########
 SCRIPTS_PATH=../data_generation
