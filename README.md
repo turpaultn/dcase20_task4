@@ -18,7 +18,7 @@ Test model for sound-separation (late integration).
 
 Python >= 3.6, pytorch >= 1.0, cudatoolkit=9.0, pandas >= 0.24.1, scipy >= 1.2.1, pysoundfile >= 0.10.2,
 scaper >= 1.3.5, librosa >= 0.6.3, youtube-dl >= 2019.4.30, tqdm >= 4.31.1, ffmpeg >= 4.1, 
-dcase_util >= 0.2.5, sed-eval >= 0.2.1, psds-eval >= 0.0.1, desed >= 1.1.7
+dcase_util >= 0.2.5, sed-eval >= 0.2.1, psds-eval >= 0.1.0, desed >= 1.1.7
 
 A simplified installation procedure example is provided below for python 3.6 based Anconda distribution for Linux based system:
 1. [install Ananconda][anaconda_download]
