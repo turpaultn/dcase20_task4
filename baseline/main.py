@@ -15,8 +15,8 @@ from torch import nn
 
 from Desed import DESED
 from DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler
-from TestModel import _load_crnn
-from evaluation_measures import get_predictions, compute_sed_eval_metrics, psds_add_predictions
+from TestModel import _load_crnn, compute_metrics, compute_psds_from_operating_points
+from evaluation_measures import get_predictions, compute_sed_eval_metrics, psds_score
 from models.CRNN import CRNN
 import config as cfg
 from utilities import ramps
@@ -245,10 +245,10 @@ if __name__ == '__main__':
     # Model and transform parameters different for source separated
     if use_separated_sources:
         n_channel = 5  # Should be changed if combine channels used
-        add_axis_conv = False
+        add_axis_conv = None
     else:
         n_channel = 1
-        add_axis_conv = True
+        add_axis_conv = 0
 
     # Model taken from 2nd of dcase19 challenge: see Delphin-Poulat2019 in the results.
     n_layers = 7
@@ -278,7 +278,7 @@ if __name__ == '__main__':
 
     # Normalisation per audio or on the full dataset
     if cfg.scaler_type == "dataset":
-        transforms = get_transforms(cfg.max_frames, add_axis_conv=add_axis_conv)
+        transforms = get_transforms(cfg.max_frames, add_axis=add_axis_conv)
         weak_data = DataLoadDf(dfs["weak"], encod_func, transforms)
         unlabel_data = DataLoadDf(dfs["unlabel"], encod_func, transforms)
         train_synth_data = DataLoadDf(dfs["train_synthetic"], encod_func, transforms)
@@ -291,7 +291,8 @@ if __name__ == '__main__':
         scaler_args = ["global", "min-max"]
         scaler = ScalerPerAudio(*scaler_args)
 
-    transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv, noise_dict_params={"snr": cfg.noise_snr})
+    transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv,
+                                noise_dict_params={"mean": 0., "snr": cfg.noise_snr})
     transforms_valid = get_transforms(cfg.max_frames, scaler, add_axis_conv)
 
     weak_data = DataLoadDf(dfs["weak"], encod_func, transforms, in_memory=cfg.in_memory)
@@ -381,7 +382,7 @@ if __name__ == '__main__':
         # Validation with synthetic data (dropping feature_filename for psds)
         valid_synth = dfs["valid_synthetic"].drop("feature_filename", axis=1)
         valid_events_metric = compute_sed_eval_metrics(predictions, valid_synth)
-        psds_add_predictions(predictions, valid_synth, durations_synth)
+        psds_score(predictions, valid_synth, durations_synth)
 
         # Update state
         state['model']['state_dict'] = crnn.state_dict()
@@ -429,18 +430,22 @@ if __name__ == '__main__':
     validation_data = DataLoadDf(dfs["validation"], encod_func, transform=transforms_valid, return_indexes=True)
     eval18_data = DataLoadDf(dfs["eval2018"], encod_func, transform=transforms_valid, return_indexes=True)
     validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
-
+    validation_labels_df = dfs["validation"].drop("feature_filename", axis=1)
+    durations_validation = get_durations_df(cfg.validation, cfg.audio_validation_dir)
+    # Preds with only one value
     valid_predictions = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
                                         pooling_time_ratio, median_window=median_window,
                                         save_predictions=predicitons_fname)
-    compute_sed_eval_metrics(valid_predictions, dfs["validation"])
-    validation_psds = dfs["validation"].drop("feature_filename", axis=1)
-    durations_validation = get_durations_df(cfg.validation, cfg.audio_validation_dir)
-    psds_add_predictions(valid_predictions, validation_psds, durations_validation)
+    compute_metrics(valid_predictions, validation_labels_df, durations_validation)
 
-    # Eval 2018
-    eval18_dataloader = DataLoader(eval18_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
-    eval18_predictions = get_predictions(crnn, eval18_dataloader, many_hot_encoder.decode_strong,
-                                         pooling_time_ratio, median_window=median_window,
-                                         save_predictions=predicitons_fname18)
-    compute_sed_eval_metrics(eval18_predictions, dfs["eval2018"])
+    # ##########
+    # Optional but recommended
+    # ##########
+    # Compute psds scores with multiple thresholds (more accurate). n_thresholds could be increased.
+    n_thresholds = 50
+    # Example of 5 thresholds: 0.1, 0.3, 0.5, 0.7, 0.9
+    list_thresholds = np.arange(1 / (n_thresholds * 2), 1, 1 / n_thresholds)
+    pred_ss_thresh = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
+                                     pooling_time_ratio, thresholds=list_thresholds, median_window=median_window,
+                                     save_predictions=predicitons_fname)
+    compute_psds_from_operating_points(pred_ss_thresh, validation_labels_df, durations_validation)

@@ -278,19 +278,18 @@ class CombineChannels(Transform):
         return np.concatenate((mix, sources[indexes_sorted[2:]]))
 
 
-def get_transforms(frames, scaler=None, add_axis_conv=True, noise_dict_params=None, combine_channels_args=None):
+def get_transforms(frames, scaler=None, add_axis=0, noise_dict_params=None, combine_channels_args=None):
     transf = []
     unsqueeze_axis = None
-    if add_axis_conv:
-        unsqueeze_axis = 0
+    if add_axis is not None:
+        unsqueeze_axis = add_axis
 
     if combine_channels_args is not None:
         transf.append(CombineChannels(*combine_channels_args))
 
     # Todo, add other augmentations
     if noise_dict_params is not None:
-        transf.append(AugmentGaussianNoise(mean=0., **noise_dict_params))
-        # transf.append(AugmentGaussianNoise(mean=0., std=0.5))
+        transf.append(AugmentGaussianNoise(**noise_dict_params))
 
     transf.extend([ApplyLog(), PadOrTrunc(nb_frames=frames), ToTensor(unsqueeze_axis=unsqueeze_axis)])
     if scaler is not None:

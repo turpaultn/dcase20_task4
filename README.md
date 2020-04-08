@@ -10,6 +10,9 @@
 - 18th March 2020: update the `DESED_synth_dcase20_train_jams.tar`on [DESED_synthetic][synthetic_dataset] 
 and comment reverb since we do not use it for the baseline.
 - 24th March 2020: release baseline without sound-separation
+- 8th April 2020: update baseline without sound-separation. (common baseline, late integration).
+Rearrange the scripts download. Final metrics done. Test model on multiple operating points.
+Test model for sound-separation (late integration).
 
 ## Dependencies
 
@@ -30,11 +33,11 @@ git subtree.
 
 More info in [Original FUSS model repo][fuss-repo-model].
 
-
-
 ### SED model
 
 More info in the [baseline] folder.
+
+### Combination of Source 
 
 ### Results
 
@@ -47,8 +50,8 @@ Additionally, the PSDS [[2]] performance are reported.
  <thead>
  <tr>
  <td></td>
- <td colspan="1">Baseline without sound separation</td>
-  <td colspan="1">Baseline with sound separation</td>
+ <td>Baseline without sound separation</td>
+  <td>Baseline with sound separation</td>
  </tr>
  </thead>
  <tbody>
@@ -58,19 +61,25 @@ Additionally, the PSDS [[2]] performance are reported.
  </tr>
  <tr>
  <td><strong>Event-based</strong></td>
- <td><strong> 33.05 %</strong></td>
+ <td><strong> 34.8 % </strong></td>
+ <td rowspan=2 >Single prediction (threshold=0.5)</td>
+ </tr>
+ <tr>
+ <td><strong>PSDS macro F1</strong></td>
+ <td><strong> 60.0% </strong></td>
  </tr>
  <tr>
  <td>PSDS </td>
- <td> 0.403 </td>
+ <td> 0.610 </td>
+  <td rowspan=3 >Multiple predictions (50 thresholds)</td>
  </tr>
  <tr>
  <td>PSDS cross-trigger</td>
- <td> 0.234 </td>
+ <td> 0.524 </td>
  </tr>
  <tr>
  <td>PSDS macro</td>
- <td> 0.199 </td>
+ <td> 0.433 </td>
  </tr>
  </tbody>
  </table>
@@ -122,7 +131,7 @@ The dataset for sound event detection of DCASE2020 task 4 is composed of:
 - Train:
 	- *weak *(DESED, recorded, 1 578 files)*
 	- *unlabel_in_domain *(DESED, recorded, 14 412 files)*
-	- synthetic soundbank *(DESED, synthetic, 2 584 files)*
+	- synthetic soundbank *(DESED, synthetic, 2060 background (SINS only) + 1006 foreground files)*
 - *Validation (DESED, recorded, 1 168 files):
 	- test2018 (288 files)
 	- eval2018 (880 files)
@@ -206,9 +215,9 @@ A Framework for the Robust Evaluation of Sound Event Detection.
 [dcase_website]: http://dcase.community/challenge2020/task-sound-event-detection-and-separation-in-domestic-environments
 [desed]: https://github.com/turpaultn/DESED
 [desed_website]: https://project.inria.fr/desed/dcase-challenge/dcase-2020-task-4/
-[evaluation_dataset]: https://zenodo.org/record/3588172
+[evaluation_dataset]: https://doi.org/10.5281/zenodo.3571049
 [FSD]: https://datasets.freesound.org/fsd/
-[fuss]: https://zenodo.org/record/3694384/
+[fuss]: https://doi.org/10.5281/zenodo.3694383
 [fuss_repo]: https://github.com/google-research/sound-separation
 [fuss-repo-model]: https://github.com/google-research/sound-separation/tree/master/models/dcase2020_fuss_baseline
 [fuss_scripts]: https://github.com/google-research/sound-separation/tree/master/datasets/fuss
@@ -216,7 +225,7 @@ A Framework for the Robust Evaluation of Sound Event Detection.
 [paper2019-eval]: https://hal.inria.fr/hal-02355573
 [paper-psds]: https://arxiv.org/pdf/1910.08440.pdf
 [Scaper]: https://github.com/justinsalamon/scaper
-[synthetic_dataset]: https://zenodo.org/record/3702397
+[synthetic_dataset]: https://doi.org/10.5281/zenodo.3550598
 [website]: http://dcase.community/challenge2020/
 
 [sound-separation]: ./sound-separation
