@@ -32,17 +32,3 @@ echo "Done"
 echo "Download SINS background... (to add TUT, add the option --TUT)"
 python ${SCRIPTS_PATH}/get_background_training.py --basedir=../synthetic
 echo "Done"
-
-
-
-############
-# Source separation
-#########
-cd ..
-wget -O FUSS_baseline_model.tar.gz https://zenodo.org/record/3694384/files/FUSS_baseline_model.tar.gz?download=1
-tar -xzf FUSS_baseline_model.tar.gz
-#rm FUSS_baseline_model.tar.gz
-
-wget -O FUSS_rir_data.tar.gz https://zenodo.org/record/3694384/files/FUSS_rir_data.tar.gz?download=1
-tar -xzf FUSS_rir_data.tar.gz
-#rm FUSS_rir_data.tar.gz

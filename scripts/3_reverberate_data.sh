@@ -4,14 +4,16 @@
 
 # We assume you're in the conda envrionment specified
 
-# Be careful The input path should corresponds to OUT_PATH in step 2
-DIR_PATH=..
-SUBSET=train  # Here the subset is also used to define the subset of RIR to use
-INPUT_PATH=${DIR_PATH}/dataset/audio/${SUBSET}/synthetic20
-
+wget -O FUSS_rir_data.tar.gz https://zenodo.org/record/3694384/files/FUSS_rir_data.tar.gz?download=1
+tar -xzf FUSS_rir_data.tar.gz
+rm FUSS_rir_data.tar.gz
+mv rir_data ../rir_data
 # Reverb default path
-RIR=${DIR_PATH}/rir_data
+RIR=../rir_data
 
+# Be careful The input path should corresponds to OUT_PATH in step 2
+SUBSET=train  # Here the subset is also used to define the subset of RIR to use
+INPUT_PATH=../dataset/audio/${SUBSET}/synthetic20
 
 REVERB_PATH=${INPUT_PATH}_reverb
 MIX_INFO=${REVERB_PATH}/mix_info.txt
