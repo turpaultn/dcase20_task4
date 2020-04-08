@@ -153,11 +153,12 @@ class AugmentGaussianNoise(Transform):
     def gaussian_noise(features, snr):
         """Apply gaussian noise on each point of the data
 
-                Args:
-                    features: numpy.array, features to be modified
-                Returns:
-                    numpy.ndarray
-                    Modified features
+            Args:
+                features: numpy.array, features to be modified
+                snr: float, average snr to be used for data augmentation
+            Returns:
+                numpy.ndarray
+                Modified features
                 """
         # If using source separation, using only the first audio (the mixture) to compute the gaussian noise,
         # Otherwise it just removes the first axis if it was an extended one
@@ -287,7 +288,6 @@ def get_transforms(frames, scaler=None, add_axis=0, noise_dict_params=None, comb
     if combine_channels_args is not None:
         transf.append(CombineChannels(*combine_channels_args))
 
-    # Todo, add other augmentations
     if noise_dict_params is not None:
         transf.append(AugmentGaussianNoise(**noise_dict_params))
 

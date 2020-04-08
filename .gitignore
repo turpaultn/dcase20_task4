@@ -20,7 +20,7 @@ features/
 missing_files/
 stored_data/
 baseline/*predictions*
-validation_meta.tsv
+validation_durations.tsv
 
 synthetic20*
 # Generated data by source separation

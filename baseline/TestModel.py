@@ -8,8 +8,8 @@ from torch.utils.data import DataLoader
 import numpy as np
 import pandas as pd
 
-from DataLoad import DataLoadDf
-from Desed import DESED
+from data_utils.DataLoad import DataLoadDf
+from data_utils.Desed import DESED
 from evaluation_measures import compute_sed_eval_metrics, psds_score, get_predictions
 from utilities.utils import to_cuda_if_available, generate_tsv_wav_durations, meta_path_to_audio_dir
 from utilities.ManyHotEncoder import ManyHotEncoder
@@ -49,11 +49,13 @@ def _load_scaler(state):
 
 
 def compute_metrics(predictions, gtruth_df, meta_df):
-    compute_sed_eval_metrics(predictions, gtruth_df)
+    events_metric = compute_sed_eval_metrics(predictions, gtruth_df)
+    macro_f1_event = events_metric.results_class_wise_average_metrics()['f_measure']['f_measure']
     dtc_threshold, gtc_threshold, cttc_threshold = 0.5, 0.5, 0.3
     psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold, ground_truth=gtruth_df, metadata=meta_df)
-    f_avg, f_class = psds.compute_macro_f_score(predictions)
-    print(f"F1_score (psds_eval) accounting cross triggers: {f_avg}")
+    psds_macro_f1, psds_f1_classes = psds.compute_macro_f_score(predictions)
+    logger.info(f"F1_score (psds_eval) accounting cross triggers: {psds_macro_f1}")
+    return macro_f1_event, psds_macro_f1
 
 
 def compute_psds_from_operating_points(list_predictions, groundtruth_df, meta_df):
@@ -104,6 +106,7 @@ def get_variables(args):
         if "validation" in gt_audio_pth:
             gt_audio_pth = osp.dirname(gt_audio_pth)
 
+    groundtruth = pd.read_csv(args.groundtruth_tsv, sep="\t")
     if osp.exists(meta_gt):
         meta_dur_df = pd.read_csv(meta_gt, sep='\t')
         if len(meta_dur_df) == 0:
@@ -111,7 +114,7 @@ def get_variables(args):
     else:
         meta_dur_df = generate_tsv_wav_durations(gt_audio_pth, meta_gt)
 
-    return model_pth, median_win, gt_audio_pth, meta_dur_df
+    return model_pth, median_win, gt_audio_pth, groundtruth, meta_dur_df
 
 
 if __name__ == '__main__':
@@ -129,7 +132,7 @@ if __name__ == '__main__':
     # Next groundtruth variable could be ommited if same organization than DESED dataset
     parser.add_argument('--meta_gt', type=str, default=None,
                         help="Path of the groundtruth description of feat_filenames and durations")
-    parser.add_argument("-t", '--groundtruth_audio_dir', type=str, default=None,
+    parser.add_argument("-ga", '--groundtruth_audio_dir', type=str, default=None,
                         help="Path of the groundtruth filename, (see in config, at dataset folder)")
     parser.add_argument("-s", '--save_predictions_path', type=str, default=None,
                         help="Path for the predictions to be saved (if needed)")
@@ -140,12 +143,11 @@ if __name__ == '__main__':
     f_args = parser.parse_args()
 
     # Get variables from f_args
-    model_path, median_window, gt_audio_dir, durations = get_variables(f_args)
+    model_path, median_window, gt_audio_dir, groundtruth, durations = get_variables(f_args)
 
     # Model
     expe_state = torch.load(model_path, map_location="cpu")
     dataset = DESED(base_feature_dir=osp.join(cfg.workspace, "dataset", "features"), compute_log=False)
-    groundtruth = pd.read_csv(f_args.groundtruth_tsv, sep="\t")
 
     gt_df_feat = dataset.initialize_and_get_df(f_args.groundtruth_tsv, gt_audio_dir, nb_files=f_args.nb_files)
     params = _load_state_vars(expe_state, gt_df_feat, median_window)

@@ -16,7 +16,7 @@ Test model for sound-separation (late integration).
 
 ## Dependencies
 
-Python >= 3.6, pytorch >= 1.0, cudatoolkit=9.0, pandas >= 0.24.1, scipy >= 1.2.1, pysoundfile >= 0.10.2,
+Python >= 3.6, pytorch >= 1.0, cudatoolkit>=9.0, pandas >= 0.24.1, scipy >= 1.2.1, pysoundfile >= 0.10.2,
 scaper >= 1.3.5, librosa >= 0.6.3, youtube-dl >= 2019.4.30, tqdm >= 4.31.1, ffmpeg >= 4.1, 
 dcase_util >= 0.2.5, sed-eval >= 0.2.1, psds-eval >= 0.1.0, desed >= 1.1.7
 
@@ -29,7 +29,7 @@ A simplified installation procedure example is provided below for python 3.6 bas
 This year, a **sound separation** model is used: see [sound-separation] folder which is the [fuss_repo] integrated as a 
 git subtree.
 
-### Source separation model
+### Sound separation model
 
 More info in [Original FUSS model repo][fuss-repo-model].
 
@@ -37,7 +37,12 @@ More info in [Original FUSS model repo][fuss-repo-model].
 
 More info in the [baseline] folder.
 
-### Combination of Source 
+### Combination of sound separation (SS) and sound event detection (SED)
+
+The baseline to combine SS and SED is a late integration.
+This means, we reuse the SED baseline, and get predictions of:
+- The validation soundscapes
+- The separated sources of the validation soundscapes.
 
 ### Results
 
@@ -62,24 +67,29 @@ Additionally, the PSDS [[2]] performance are reported.
  <tr>
  <td><strong>Event-based</strong></td>
  <td><strong> 34.8 % </strong></td>
+ <td><strong> 35.6 % </strong></td>
  <td rowspan=2 >Single prediction (threshold=0.5)</td>
  </tr>
  <tr>
  <td><strong>PSDS macro F1</strong></td>
  <td><strong> 60.0% </strong></td>
+ <td><strong> 60.5% </strong></td>
  </tr>
  <tr>
  <td>PSDS </td>
  <td> 0.610 </td>
+ <td> 0.626 </td>
   <td rowspan=3 >Multiple predictions (50 thresholds)</td>
  </tr>
  <tr>
  <td>PSDS cross-trigger</td>
  <td> 0.524 </td>
+ <td> 0.546 </td>
  </tr>
  <tr>
  <td>PSDS macro</td>
  <td> 0.433 </td>
+ <td> 0.449 </td>
  </tr>
  </tbody>
  </table>
@@ -100,6 +110,9 @@ The difference between the 3 performances reported:
 | PSDS macro            | 0         | 1         |
 
 alpha_ct is the cost of cross-trigger, alpha_st is the cost of instability across classes.
+
+### Reproducing the results
+See [baseline] folder.
 
 ## Dataset
 

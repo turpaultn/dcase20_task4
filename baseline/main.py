@@ -13,17 +13,17 @@ import torch
 from torch.utils.data import DataLoader
 from torch import nn
 
-from Desed import DESED
-from DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler
+from data_utils.Desed import DESED
+from data_utils.DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler
 from TestModel import _load_crnn, compute_metrics, compute_psds_from_operating_points
-from evaluation_measures import get_predictions, compute_sed_eval_metrics, psds_score
+from evaluation_measures import get_predictions
 from models.CRNN import CRNN
 import config as cfg
 from utilities import ramps
 from utilities.Logger import create_logger
 from utilities.Scaler import ScalerPerAudio, Scaler
-from utilities.utils import SaveBest, to_cuda_if_available, weights_init, \
-    AverageMeterSet, EarlyStopping, get_durations_df
+from utilities.utils import SaveBest, to_cuda_if_available, weights_init, AverageMeterSet, EarlyStopping, \
+    get_durations_df
 from utilities.ManyHotEncoder import ManyHotEncoder
 from utilities.Transforms import get_transforms
 
@@ -370,21 +370,21 @@ if __name__ == '__main__':
                                       median_window=median_window, save_predictions=None)
         # Validation with synthetic data (dropping feature_filename for psds)
         valid_synth = dfs["valid_synthetic"].drop("feature_filename", axis=1)
-        valid_events_metric, psds_m_f1 = compute_metrics(predictions, valid_synth, durations_synth)
+        valid_synth_f1, psds_m_f1 = compute_metrics(predictions, valid_synth, durations_synth)
 
         # Update state
         state['model']['state_dict'] = crnn.state_dict()
         state['model_ema']['state_dict'] = crnn_ema.state_dict()
         state['optimizer']['state_dict'] = optim.state_dict()
         state['epoch'] = epoch
-        state['valid_metric'] = valid_events_metric.results()
+        state['valid_metric'] = valid_synth_f1
+        state['valid_f1_psds'] = psds_m_f1
 
         # Callbacks
         if cfg.checkpoint_epochs is not None and (epoch + 1) % cfg.checkpoint_epochs == 0:
             model_fname = os.path.join(saved_model_dir, "baseline_epoch_" + str(epoch))
             torch.save(state, model_fname)
 
-        valid_synth_f1 = valid_events_metric.results_class_wise_average_metrics()['f_measure']['f_measure']
         if cfg.save_best:
             if save_best_cb.apply(valid_synth_f1):
                 model_fname = os.path.join(saved_model_dir, "baseline_best")

@@ -6,13 +6,6 @@ See in config.py the different paths if you want to modify them for your own dat
 
 - `python main.py`
 
-### Train SED model with separated sources already extracted
-
-Make sure you extracted the separated sources with the FUSS model (see [4_separate_mixtures.sh])
-
-- `python main.py -ss`
-
-
 ### System description
 The baseline model is inspired by last year 2nd best submission system of DCASE 2019 task 4:
 L. Delphin-Poulat & C. Plapous [[1]].
@@ -30,9 +23,34 @@ The main differences of the baseline system (without source separation) compared
 - Early stopping (10 epochs).
 
 
+## Testing baseline models
+### SED only
+```bash
+python TestModel.py -m "model_path" -g ../dataset/metadata/validation/validation.tsv  \
+-ga ../dataset/audio/validation -s stored_data/baseline/validation_predictions.tsv 
+```
+
+### Sound separation and SED
+This assume you extracted the sources as described in [4_separate_mixtures.sh].
+```bash
+python TestModel_ss_late_integration.py -m "model_path" -g ../dataset/metadata/validation/validation.tsv  \
+-ga ../dataset/audio/validation -s stored_data/baseline/validation_predictions.tsv \
+-a ../dataset/audio/validation_ss/separated_sources/ -k "1"
+```
+The `-k "1"` means that we are using only the 2nd sources of the sound separation model.
+The sound separation model has been trained on soundscapes being a mix of FUSS and DESED data. 
+It has 3 sources:
+- DESED background
+- DESED foreground (the one used with SED)
+- FUSS mixture
+
+To combine SS and SED, we average the predictions of the mixture (usual SED) and 
+the estimated DESED foreground.
+
+Multiple experiments have been made to combine SS and SED and will be presented in the baselne paper.
+
 **Note:** The performance might not be exactly reproducible on a GPU based system.
-That is why, you can download the [weights of the networks][model-weights]
-used for the experiments and run `TestModel.py --model_path="Path_of_model" ` to reproduce the results.
+That is why, you can download the [weights of the networks][model-weights] used for the experiments.
 
 ### References
  - [[1]] L. Delphin-Poulat & C. Plapous, technical report, dcase 2019.
@@ -45,4 +63,4 @@ used for the experiments and run `TestModel.py --model_path="Path_of_model" ` to
 [4_separate_mixtures.sh]: ../scripts/4_separate_mixtures.sh
 
 [dcase2019-baseline]: https://github.com/turpaultn/DCASE2019_task4
-[model-weights]: https://zenodo.org/record/3726376
+[model-weights]: https://doi.org/10.5281/zenodo.3726375
