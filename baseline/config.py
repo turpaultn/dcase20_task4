@@ -51,7 +51,7 @@ n_epoch_rampup = 50
 
 checkpoint_epochs = 1
 save_best = True
-early_stopping = 10
+early_stopping = None
 es_init_wait = 50  # es for early stopping
 adjust_lr = True
 max_learning_rate = 0.001  # Used if adjust_lr is True
