@@ -25,7 +25,7 @@ INFERENCE_META=../fuss_desed_baseline_dry_2_model/fuss_desed_baseline_dry_2_infe
 
 ######## Under this line you should not have to change anything ###########
 # Recorded data
-declare -a arr=(${AUDIO_PATH_VALIDATION}) # ${AUDIO_PATH_WEAK} ${AUDIO_PATH_UNLABEL} ${AUDIO_PATH_VALIDATION})
+declare -a arr=(${AUDIO_PATH_WEAK} ${AUDIO_PATH_UNLABEL} ${AUDIO_PATH_VALIDATION})
 
 for audio_path in "${arr[@]}"
 do
@@ -35,7 +35,7 @@ do
    # or do whatever with individual element of the array
 done
 
-## Synthetic (generated) data
-#python ${SCRIPTS_PATH}/separate_wavs.py --audio_path=${AUDIO_PATH_SYNTH} \
-#--output_folder=${GENERATED_SYNTH} --checkpoint=${CHECKPOINT_MODEL} --inference=${INFERENCE_META}
+# Synthetic (generated) data
+python ${SCRIPTS_PATH}/separate_wavs.py --audio_path=${AUDIO_PATH_SYNTH} \
+--output_folder=${GENERATED_SYNTH} --checkpoint=${CHECKPOINT_MODEL} --inference=${INFERENCE_META}
 
