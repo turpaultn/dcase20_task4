@@ -11,7 +11,8 @@ import numpy as np
 
 from data_utils.DataLoad import DataLoadDf
 from data_utils.Desed import DESED
-from TestModel import _load_scaler, _load_crnn, compute_psds_from_operating_points, compute_metrics
+from TestModel import _load_scaler, _load_crnn
+from evaluation_measures import psds_score, compute_psds_from_operating_points, compute_metrics
 from utilities.utils import to_cuda_if_available, generate_tsv_wav_durations, meta_path_to_audio_dir
 from utilities.ManyHotEncoder import ManyHotEncoder
 from utilities.Transforms import get_transforms
@@ -87,8 +88,11 @@ def get_predictions_ss_late_integration(model, valid_dataload, decoder, pooling_
     # Save predictions
     if save_predictions is not None:
         if isinstance(save_predictions, str):
-            base, ext = osp.splitext(save_predictions)
-            save_predictions = [osp.join(base, f"{threshold:.3f}{ext}") for threshold in thresholds]
+            if len(thresholds) == 1:
+                save_predictions = [save_predictions]
+            else:
+                base, ext = osp.splitext(save_predictions)
+                save_predictions = [osp.join(base, f"{threshold:.3f}{ext}") for threshold in thresholds]
         else:
             assert len(save_predictions) == len(thresholds), \
                 f"There should be a prediction file per threshold: len predictions: {len(save_predictions)}\n" \
@@ -232,4 +236,5 @@ if __name__ == '__main__':
                                                          thresholds=thresholds,
                                                          median_window=params["median_window"],
                                                          save_predictions=f_args.save_predictions_path)
-    compute_psds_from_operating_points(pred_ss_thresh, groundtruth, durations)
+    psds = compute_psds_from_operating_points(pred_ss_thresh, groundtruth, durations)
+    psds_score(psds, filename_roc_curves=osp.splitext(f_args.save_predictions_path)[0] + "_roc.png")

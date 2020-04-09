@@ -69,15 +69,24 @@ while other PSDS values are computed using 50 operating points (linear from 0.01
 - Sound event detection baseline:
 
 |         | Macro F-score Event-based | PSDS macro F-score | PSDS | PSDS cross-trigger | PSDS macro
-----------|---------------------------|--------------------|------|--------------------|-----------
+----------|--------------------------:|-------------------:|-----:|-------------------:|----------:
 Validation| **34.8 %**                | **60.0%**          | 0.610| 0.524              | 0.433
+
 
 - Sound event detection + sound separation baseline
 
 |         | Macro F-score Event-based | PSDS macro F-score | PSDS | PSDS cross-trigger | PSDS macro
-----------|---------------------------|--------------------|------|--------------------|-----------
+----------|--------------------------:|-------------------:|-----:|-------------------:|----------:
 Validation| **35.6 %**                | **60.5%**          | 0.626| 0.546              | 0.449
  
+
+**Validation roc curves**
+
+|                       | SED baseline         | SED + SS baseline | 
+:-----------------------|:--------------------:|:------------------------:
+psds roc curve          |![sed_roc_0_0_100]    | ![sed_ss_roc_0_0_100]    
+psds cross-trigger curve|![sed_roc_1_0_100]    | ![sed_ss_roc_1_0_100]  
+psds macro curve        | ![sed_roc_0_1_100]   |![sed_ss_roc_0_1_100]
 
 Please refer to the PSDS paper [[2]] for more information about it.
 The parameters used for psds performances are:
@@ -265,6 +274,13 @@ In Proceedings of the 21st ACM international conference on Multimedia, 411–412
 [Scaper]: https://github.com/justinsalamon/scaper
 [synthetic_dataset]: https://doi.org/10.5281/zenodo.3550598
 [website]: http://dcase.community/challenge2020/
+
+[sed_roc_0_0_100]: ../figures/sed_baseline/psds_roc_0_0_100.png
+[sed_roc_1_0_100]: ../figures/sed_baseline/psds_roc_1_0_100.png
+[sed_roc_0_1_100]: ../figures/sed_baseline/psds_roc_0_1_100.png
+[sed_ss_roc_0_0_100]: ../figures/sed_ss_baseline/psds_roc_0_0_100.png
+[sed_ss_roc_1_0_100]: ../figures/sed_ss_baseline/psds_roc_1_0_100.png
+[sed_ss_roc_0_1_100]: ../figures/sed_ss_baseline/psds_roc_0_1_100.png
 
 [scripts]: ./scripts
 [sound-separation]: ./sound-separation

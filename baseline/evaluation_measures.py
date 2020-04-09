@@ -9,6 +9,7 @@ import sed_eval
 import numpy as np
 import pandas as pd
 import torch
+from psds_eval import plot_psd_roc, PSDSEval
 
 import config as cfg
 from utilities.Logger import create_logger
@@ -199,19 +200,27 @@ def get_predictions(model, dataloader, decoder, pooling_time_ratio=1, thresholds
     return list_predictions
 
 
-def psds_score(psds):
+def psds_score(psds, filename_roc_curves=None):
     """ add operating points to PSDSEval object and compute metrics
 
     Args:
         psds: psds.PSDSEval object initialized with the groundtruth corresponding to the predictions
+        filename_roc_curves: str, the base filename of the roc curve to be computed
     """
     try:
         psds_score = psds.psds(alpha_ct=0, alpha_st=0, max_efpr=100)
-        print(f"\nPSD-Score (0, 0, 100): {psds_score.value:.5f}")
+        logger.info(f"\nPSD-Score (0, 0, 100): {psds_score.value:.5f}")
         psds_ct_score = psds.psds(alpha_ct=1, alpha_st=0, max_efpr=100)
-        print(f"\nPSD-Score (1, 0, 100): {psds_ct_score.value:.5f}")
+        logger.info(f"\nPSD-Score (1, 0, 100): {psds_ct_score.value:.5f}")
         psds_macro_score = psds.psds(alpha_ct=0, alpha_st=1, max_efpr=100)
-        print(f"\nPSD-Score (0, 1, 100): {psds_macro_score.value:.5f}")
+        logger.info(f"\nPSD-Score (0, 1, 100): {psds_macro_score.value:.5f}")
+        if filename_roc_curves is not None:
+            os.makedirs(osp.dirname(filename_roc_curves), exist_ok=True)
+            base, ext = osp.splitext(filename_roc_curves)
+            plot_psd_roc(psds_score, filename=f"{base}_0_0_100{ext}")
+            plot_psd_roc(psds_ct_score, filename=f"{base}_1_0_100{ext}")
+            plot_psd_roc(psds_score, filename=f"{base}_0_1_100{ext}")
+
     except psds_eval.psds.PSDSEvalError as e:
         logger.error("psds score did not work ....")
         logger.error(e)
@@ -385,3 +394,21 @@ def audio_tagging_results(reference, estimated):
 
     results_serie = pd.DataFrame(macro_res, index=mhe.labels)
     return results_serie[0]
+
+
+def compute_psds_from_operating_points(list_predictions, groundtruth_df, meta_df, dtc_threshold=0.5, gtc_threshold=0.5,
+                                       cttc_threshold=0.3):
+    psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold, ground_truth=groundtruth_df, metadata=meta_df)
+    for prediction_df in list_predictions:
+        psds.add_operating_point(prediction_df)
+    return psds
+
+
+def compute_metrics(predictions, gtruth_df, meta_df):
+    events_metric = compute_sed_eval_metrics(predictions, gtruth_df)
+    macro_f1_event = events_metric.results_class_wise_average_metrics()['f_measure']['f_measure']
+    dtc_threshold, gtc_threshold, cttc_threshold = 0.5, 0.5, 0.3
+    psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold, ground_truth=gtruth_df, metadata=meta_df)
+    psds_macro_f1, psds_f1_classes = psds.compute_macro_f_score(predictions)
+    logger.info(f"F1_score (psds_eval) accounting cross triggers: {psds_macro_f1}")
+    return macro_f1_event, psds_macro_f1

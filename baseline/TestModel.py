@@ -3,14 +3,14 @@ import argparse
 import os.path as osp
 
 import torch
-from psds_eval import PSDSEval
 from torch.utils.data import DataLoader
 import numpy as np
 import pandas as pd
 
 from data_utils.DataLoad import DataLoadDf
 from data_utils.Desed import DESED
-from evaluation_measures import compute_sed_eval_metrics, psds_score, get_predictions
+from evaluation_measures import psds_score, get_predictions, \
+    compute_psds_from_operating_points, compute_metrics
 from utilities.utils import to_cuda_if_available, generate_tsv_wav_durations, meta_path_to_audio_dir
 from utilities.ManyHotEncoder import ManyHotEncoder
 from utilities.Transforms import get_transforms
@@ -46,24 +46,6 @@ def _load_scaler(state):
         raise NotImplementedError("Not the right type of Scaler has been saved in state")
     scaler.load_state_dict(state["scaler"]["state_dict"])
     return scaler
-
-
-def compute_metrics(predictions, gtruth_df, meta_df):
-    events_metric = compute_sed_eval_metrics(predictions, gtruth_df)
-    macro_f1_event = events_metric.results_class_wise_average_metrics()['f_measure']['f_measure']
-    dtc_threshold, gtc_threshold, cttc_threshold = 0.5, 0.5, 0.3
-    psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold, ground_truth=gtruth_df, metadata=meta_df)
-    psds_macro_f1, psds_f1_classes = psds.compute_macro_f_score(predictions)
-    logger.info(f"F1_score (psds_eval) accounting cross triggers: {psds_macro_f1}")
-    return macro_f1_event, psds_macro_f1
-
-
-def compute_psds_from_operating_points(list_predictions, groundtruth_df, meta_df):
-    dtc_threshold, gtc_threshold, cttc_threshold = 0.5, 0.5, 0.3
-    psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold, ground_truth=groundtruth_df, metadata=meta_df)
-    for prediction_df in list_predictions:
-        psds.add_operating_point(prediction_df)
-    psds_score(psds)
 
 
 def _load_state_vars(state, gtruth_df, median_win=None):
@@ -170,4 +152,6 @@ if __name__ == '__main__':
                                      params["many_hot_encoder"].decode_strong, params["pooling_time_ratio"],
                                      thresholds=list_thresholds, median_window=params["median_window"],
                                      save_predictions=f_args.save_predictions_path)
-    compute_psds_from_operating_points(pred_ss_thresh, groundtruth, durations)
+    psds = compute_psds_from_operating_points(pred_ss_thresh, groundtruth, durations)
+    psds_score(psds, filename_roc_curves=osp.splitext(f_args.save_predictions_path)[0] + "_roc.png")
+

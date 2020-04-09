@@ -15,8 +15,8 @@ from torch import nn
 
 from data_utils.Desed import DESED
 from data_utils.DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler
-from TestModel import _load_crnn, compute_metrics, compute_psds_from_operating_points
-from evaluation_measures import get_predictions
+from TestModel import _load_crnn
+from evaluation_measures import get_predictions, psds_score, compute_psds_from_operating_points, compute_metrics
 from models.CRNN import CRNN
 import config as cfg
 from utilities import ramps
@@ -189,18 +189,12 @@ def get_dfs(desed_dataset, nb_files=None, separated_sources=False):
     train_synth_df.offset = train_synth_df.offset * cfg.sample_rate // cfg.hop_size // pooling_time_ratio
     log.debug(valid_synth_df.event_label.value_counts())
 
-    # Eval 2018 to report results
-    eval2018 = pd.read_csv(cfg.eval2018, sep="\t")
-    eval_2018_df = validation_df[validation_df.filename.isin(eval2018.filename)]
-    log.debug(f"eval2018 len: {len(eval_2018_df)}")
-
     data_dfs = {"weak": weak_df,
                 "unlabel": unlabel_df,
                 "synthetic": synthetic_df,
                 "train_synthetic": train_synth_df,
                 "valid_synthetic": valid_synth_df,
                 "validation": validation_df,
-                "eval2018": eval_2018_df
                 }
 
     return data_dfs
@@ -413,10 +407,8 @@ if __name__ == '__main__':
     crnn.eval()
     transforms_valid = get_transforms(cfg.max_frames, scaler, add_axis_conv)
     predicitons_fname = os.path.join(saved_pred_dir, "baseline_validation.tsv")
-    predicitons_fname18 = os.path.join(saved_pred_dir, "baseline_eval18.tsv")
 
     validation_data = DataLoadDf(dfs["validation"], encod_func, transform=transforms_valid, return_indexes=True)
-    eval18_data = DataLoadDf(dfs["eval2018"], encod_func, transform=transforms_valid, return_indexes=True)
     validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
     validation_labels_df = dfs["validation"].drop("feature_filename", axis=1)
     durations_validation = get_durations_df(cfg.validation, cfg.audio_validation_dir)
@@ -436,4 +428,5 @@ if __name__ == '__main__':
     pred_ss_thresh = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
                                      pooling_time_ratio, thresholds=list_thresholds, median_window=median_window,
                                      save_predictions=predicitons_fname)
-    compute_psds_from_operating_points(pred_ss_thresh, validation_labels_df, durations_validation)
+    psds = compute_psds_from_operating_points(pred_ss_thresh, validation_labels_df, durations_validation)
+    psds_score(psds, filename_roc_curves=os.path.join(saved_pred_dir, "figures/psds_roc.png"))

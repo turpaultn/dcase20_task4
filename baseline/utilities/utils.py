@@ -90,9 +90,9 @@ class SaveBest:
     """
     def __init__(self, val_comp="inf"):
         self.comp = val_comp
-        if val_comp == "inf":
+        if val_comp in ["inf", "lt", "desc"]:
             self.best_val = np.inf
-        elif val_comp == "sup":
+        elif val_comp in ["sup", "gt", "asc"]:
             self.best_val = 0
         else:
             raise NotImplementedError("value comparison is only 'inf' or 'sup'")
