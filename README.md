@@ -41,60 +41,43 @@ More info in the [baseline] folder.
 ### Combination of sound separation (SS) and sound event detection (SED)
 
 The baseline to combine SS and SED is a late integration.
-This means, we reuse the SED baseline, and get predictions of:
-- The validation soundscapes
-- The separated sources of the validation soundscapes.
+
+The sound separation baseline has been trained using 3 sources, so it returns: 
+- DESED background
+- DESED foreground
+- FUSS mixture
+
+In our case, we use only the ouput of the second source.
+
+To get the predictions of the combination of SED and SS we do as follow:
+- Get the output (not binarized with threshold) of the validation soundscapes (usual SED)
+- Get the output (not binarized with threshold) of the DESED foreground source from SS model.
+- Take the average of both outputs.
+- Apply thresholds (different for F-scores and psds)
+- Apply median filtering (0.45s)
 
 ### Results
 
 System performance are reported in term of event-based F-scores [[1]] 
-with a 200ms collar on onsets and a 200ms / 20% of the events length collar on offsets. 
+with a 200ms collar on onsets and a 200ms / 20% of the events length collar on offsets.
 
 Additionally, the PSDS [[2]] performance are reported. 
 
-<table class="table table-striped">
- <thead>
- <tr>
- <td></td>
- <td colspan=2 align=center>Validation</td> 
- </tr>
- <tr>
- <td></td>
- <td>Baseline without sound separation</td>
-  <td>Baseline with sound separation</td>
-  <td></td>
- </tr>
- </thead>
- <tbody>
- <tr>
- <td><strong>Event-based</strong></td>
- <td><strong> 34.8 % </strong></td>
- <td><strong> 35.6 % </strong></td>
- <td rowspan=2 >Single prediction (threshold=0.5)</td>
- </tr>
- <tr>
- <td><strong>PSDS macro F1</strong></td>
- <td><strong> 60.0% </strong></td>
- <td><strong> 60.5% </strong></td>
- </tr>
- <tr>
- <td>PSDS </td>
- <td> 0.610 </td>
- <td> 0.626 </td>
-  <td rowspan=3 >Multiple predictions (50 thresholds)</td>
- </tr>
- <tr>
- <td>PSDS cross-trigger</td>
- <td> 0.524 </td>
- <td> 0.546 </td>
- </tr>
- <tr>
- <td>PSDS macro</td>
- <td> 0.433 </td>
- <td> 0.449 </td>
- </tr>
- </tbody>
- </table>
+*F-scores are computed using a single operating point (threshold=0.5) 
+while other PSDS values are computed using 50 operating points (linear from 0.01 to 0.99).*
+
+- Sound event detection baseline:
+
+|         | Macro F-score Event-based | PSDS macro F-score | PSDS | PSDS cross-trigger | PSDS macro
+----------|---------------------------|--------------------|------|--------------------|-----------
+Validation| **34.8 %**                | **60.0%**          | 0.610| 0.524              | 0.433
+
+- Sound event detection + sound separation baseline
+
+|         | Macro F-score Event-based | PSDS macro F-score | PSDS | PSDS cross-trigger | PSDS macro
+----------|---------------------------|--------------------|------|--------------------|-----------
+Validation| **35.6 %**                | **60.5%**          | 0.626| 0.546              | 0.449
+ 
 
 Please refer to the PSDS paper [[2]] for more information about it.
 The parameters used for psds performances are:

@@ -44,7 +44,7 @@ It has 3 sources:
 - FUSS mixture
 
 To combine SS and SED, we average the predictions of the mixture (usual SED) and 
-the estimated DESED foreground.
+the estimated DESED foreground (before binarization).
 
 Multiple experiments have been made to combine SS and SED and will be presented in the baselne paper.
 
