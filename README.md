@@ -275,12 +275,12 @@ In Proceedings of the 21st ACM international conference on Multimedia, 411–412
 [synthetic_dataset]: https://doi.org/10.5281/zenodo.3550598
 [website]: http://dcase.community/challenge2020/
 
-[sed_roc_0_0_100]: ../figures/sed_baseline/psds_roc_0_0_100.png
-[sed_roc_1_0_100]: ../figures/sed_baseline/psds_roc_1_0_100.png
-[sed_roc_0_1_100]: ../figures/sed_baseline/psds_roc_0_1_100.png
-[sed_ss_roc_0_0_100]: ../figures/sed_ss_baseline/psds_roc_0_0_100.png
-[sed_ss_roc_1_0_100]: ../figures/sed_ss_baseline/psds_roc_1_0_100.png
-[sed_ss_roc_0_1_100]: ../figures/sed_ss_baseline/psds_roc_0_1_100.png
+[sed_roc_0_0_100]: figures/sed_baseline/psds_roc_0_0_100.png
+[sed_roc_1_0_100]: figures/sed_baseline/psds_roc_1_0_100.png
+[sed_roc_0_1_100]: figures/sed_baseline/psds_roc_0_1_100.png
+[sed_ss_roc_0_0_100]: figures/sed_ss_baseline/psds_roc_0_0_100.png
+[sed_ss_roc_1_0_100]: figures/sed_ss_baseline/psds_roc_1_0_100.png
+[sed_ss_roc_0_1_100]: figures/sed_ss_baseline/psds_roc_0_1_100.png
 
 [scripts]: ./scripts
 [sound-separation]: ./sound-separation
