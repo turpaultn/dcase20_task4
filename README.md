@@ -56,15 +56,16 @@ Additionally, the PSDS [[2]] performance are reported.
  <thead>
  <tr>
  <td></td>
+ <td colspan=2 align=center>Validation</td> 
+ </tr>
+ <tr>
+ <td></td>
  <td>Baseline without sound separation</td>
   <td>Baseline with sound separation</td>
+  <td></td>
  </tr>
  </thead>
  <tbody>
- <tr>
- <td></td>
- <td> Validation </td>
- </tr>
  <tr>
  <td><strong>Event-based</strong></td>
  <td><strong> 34.8 % </strong></td>
