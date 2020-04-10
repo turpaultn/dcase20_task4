@@ -19,7 +19,6 @@ tmp/
 features/
 missing_files/
 stored_data/
-baseline/*predictions*
 validation_durations.tsv
 
 synthetic20*
