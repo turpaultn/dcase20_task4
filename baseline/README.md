@@ -6,22 +6,6 @@ See in config.py the different paths if you want to modify them for your own dat
 
 - `python main.py`
 
-### System description
-The baseline model is inspired by last year 2nd best submission system of DCASE 2019 task 4:
-L. Delphin-Poulat & C. Plapous [[1]].
-
-It is an improvement of [dcase 2019 baseline][dcase2019-baseline]. The model is a mean-teacher model [[2]][2].
-
-The main differences of the baseline system (without source separation) compared to dcase 2019:
-- The sampling rate becomes 16kHz.
-- Features:
-	- 2048 fft window, 255 hop size, 8000 max frequency for mel, 128 mel bins.
-- Different synthetic dataset is used.
-- The architecture (number of layers) is taken from L. Delphin-Poulat & C. Plapous [[1]].
-- There is rampup for the learning rate for 50 epochs.
-- Median window of 0.45s.
-
-
 ## Testing baseline models
 ### SED only
 ```bash
@@ -50,6 +34,23 @@ Multiple experiments have been made to combine SS and SED and will be presented 
 
 **Note:** The performance might not be exactly reproducible on a GPU based system.
 That is why, you can download the [weights of the networks][model-weights] used for the experiments.
+
+
+### System description
+The baseline model is inspired by last year 2nd best submission system of DCASE 2019 task 4:
+L. Delphin-Poulat & C. Plapous [[1]].
+
+It is an improvement of [dcase 2019 baseline][dcase2019-baseline]. The model is a mean-teacher model [[2]][2].
+
+The main differences of the baseline system (without source separation) compared to dcase 2019:
+- The sampling rate becomes 16kHz.
+- Features:
+	- 2048 fft window, 255 hop size, 8000 max frequency for mel, 128 mel bins.
+- Different synthetic dataset is used.
+- The architecture (number of layers) is taken from L. Delphin-Poulat & C. Plapous [[1]].
+- There is rampup for the learning rate for 50 epochs.
+- Median window of 0.45s.
+
 
 ### References
  - [[1]] L. Delphin-Poulat & C. Plapous, technical report, dcase 2019.
