@@ -153,5 +153,7 @@ if __name__ == '__main__':
                                      thresholds=list_thresholds, median_window=params["median_window"],
                                      save_predictions=f_args.save_predictions_path)
     psds = compute_psds_from_operating_points(pred_ss_thresh, groundtruth, durations)
-    psds_score(psds, filename_roc_curves=osp.splitext(f_args.save_predictions_path)[0] + "_roc.png")
+    if f_args.save_predictions_path is not None:
+        fname_roc = osp.splitext(f_args.save_predictions_path)[0] + "_roc.png"
+    psds_score(psds, filename_roc_curves=fname_roc)
 
