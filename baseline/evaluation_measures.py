@@ -215,7 +215,8 @@ def psds_score(psds, filename_roc_curves=None):
         psds_macro_score = psds.psds(alpha_ct=0, alpha_st=1, max_efpr=100)
         logger.info(f"\nPSD-Score (0, 1, 100): {psds_macro_score.value:.5f}")
         if filename_roc_curves is not None:
-            os.makedirs(osp.dirname(filename_roc_curves), exist_ok=True)
+            if osp.dirname(filename_roc_curves) != "":
+                os.makedirs(osp.dirname(filename_roc_curves), exist_ok=True)
             base, ext = osp.splitext(filename_roc_curves)
             plot_psd_roc(psds_score, filename=f"{base}_0_0_100{ext}")
             plot_psd_roc(psds_ct_score, filename=f"{base}_1_0_100{ext}")
