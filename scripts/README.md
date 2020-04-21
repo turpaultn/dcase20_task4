@@ -8,7 +8,7 @@ The scripts defines the different steps to download the data.
 	- Download background training to be included in soundbank
 
 - 2- You have 2 scenarios to generate the base synthetic data:
-	- You download the Jams from 2020 on the DESED dataset
+	- You download the Jams from 2020 on the DESED dataset (recommended)
 	- You recreate the files thanks by launching the same parameters (random_seed, n_jobs)
 
 - 3- (NOT USED FOR THE BASELINE) Reverberate synthetic data:
