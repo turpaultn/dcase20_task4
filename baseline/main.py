@@ -159,20 +159,20 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
     return loss
 
 
-def get_dfs(desed_dataset, nb_files=None, separated_sources=False):
+def get_dfs(desed_dataset, subsets, nb_files=None, separated_sources=False):
+    data_dfs = {}
     log = create_logger(__name__ + "/" + inspect.currentframe().f_code.co_name, terminal_level=cfg.terminal_level)
-    audio_weak_ss = None
-    audio_unlabel_ss = None
-    audio_validation_ss = None
-    audio_synthetic_ss = None
-    if separated_sources:
-        audio_weak_ss = cfg.weak_ss
-        audio_unlabel_ss = cfg.unlabel_ss
-        audio_validation_ss = cfg.validation_ss
-        audio_synthetic_ss = cfg.synthetic_ss
+    audio_unlabel_ss = cfg.unlabel_ss if separated_sources else None
+    audio_validation_ss = cfg.validation_ss if separated_sources else None
+    audio_synthetic_ss = cfg.synthetic_ss if separated_sources else None
 
-    weak_df = desed_dataset.initialize_and_get_df(cfg.weak, audio_dir_ss=audio_weak_ss, nb_files=nb_files)
-    unlabel_df = desed_dataset.initialize_and_get_df(cfg.unlabel, audio_dir_ss=audio_unlabel_ss, nb_files=nb_files)
+    if "weak" in subsets:
+        audio_weak_ss = cfg.weak_ss if separated_sources else None
+        weak_df = desed_dataset.initialize_and_get_df(cfg.weak, audio_dir_ss=audio_weak_ss, nb_files=nb_files)
+        data_dfs["weak"] = weak_df
+    if "unlabel" in subsets:
+        unlabel_df = desed_dataset.initialize_and_get_df(cfg.unlabel, audio_dir_ss=audio_unlabel_ss, nb_files=nb_files)
+        data_dfs["unlabel"] = unlabel_df
     # Event if synthetic not used for training, used on validation purpose
     synthetic_df = desed_dataset.initialize_and_get_df(cfg.synthetic, audio_dir_ss=audio_synthetic_ss,
                                                        nb_files=nb_files, download=False)
@@ -189,15 +189,73 @@ def get_dfs(desed_dataset, nb_files=None, separated_sources=False):
     train_synth_df.offset = train_synth_df.offset * cfg.sample_rate // cfg.hop_size // pooling_time_ratio
     log.debug(valid_synth_df.event_label.value_counts())
 
-    data_dfs = {"weak": weak_df,
-                "unlabel": unlabel_df,
-                "synthetic": synthetic_df,
-                "train_synthetic": train_synth_df,
-                "valid_synthetic": valid_synth_df,
-                "validation": validation_df,
-                }
+    data_dfs.update({
+        "synthetic": synthetic_df,
+        "train_synthetic": train_synth_df,
+        "valid_synthetic": valid_synth_df,
+        "validation": validation_df,
+    })
 
     return data_dfs
+
+
+def set_model_name(subsets):
+    add_model_name = ""
+    if "synthetic" in subsets:
+        add_model_name += "_s"
+    if "unlabel" in subsets:
+        add_model_name += "_u"
+    if "weak" in subsets:
+        add_model_name += "_w"
+    return add_model_name
+
+
+def set_train_dataset(subsets, dfs_dict, encoding_func=None, batch_nbs=None):
+    # By default batch sizes
+    if batch_nbs is None:
+        if subsets == ["synthetic", "unlabel", "weak"]:
+            batch_nbs = [cfg.batch_size//4, cfg.batch_size//2, cfg.batch_size//4]
+        elif subsets == ["unlabel", "weak"]:
+            batch_nbs = [cfg.batch_size // 4, 3 * cfg.batch_size // 4]
+        elif subsets == ["synthetic", "unlabel"]:
+            batch_nbs = [3 * cfg.batch_size // 4, cfg.batch_size // 4]
+        elif subsets == ["synthetic", "weak"]:
+            batch_nbs = [cfg.batch_size // 2, cfg.batch_size // 2]
+        else:
+            assert len(subsets) == 1, "subsets is in the wrong format"
+            batch_nbs = [cfg.batch_size]
+
+    assert len(subsets) == len(batch_nbs), "The number of subsets should match the number of batch_prob"
+
+    batch_szs = []
+    list_data = []
+    if "synthetic" in subsets:
+        prob_synth = batch_nbs[subsets.index("synthetic")]
+        batch_szs.append(prob_synth)
+        strong_slice = slice(prob_synth)
+        synth_data = DataLoadDf(dfs_dict["train_synthetic"], encoding_func, in_memory=cfg.in_memory)
+        list_data.append(synth_data)
+        logger.debug(f"len synthetic: {len(synth_data)}")
+    else:
+        strong_slice = None
+
+    if "unlabel" in subsets:
+        batch_szs.append(batch_nbs[subsets.index("unlabel")])
+        unlabel_data = DataLoadDf(dfs_dict["unlabel"], encoding_func, in_memory=cfg.in_memory)
+        list_data.append(unlabel_data)
+        logger.debug(f"len synthetic: {len(unlabel_data)}")
+
+    if "weak" in subsets:
+        prob_weak = batch_nbs[subsets.index("weak")]
+        batch_szs.append(prob_weak)
+        weak_slice = slice(cfg.batch_size - prob_weak, cfg.batch_size)
+        weak_data = DataLoadDf(dfs_dict["weak"], encoding_func, in_memory=cfg.in_memory)
+        list_data.append(weak_data)
+        logger.debug(f"len synthetic: {len(weak_data)}")
+    else:
+        weak_slice = None
+
+    return list_data, batch_szs, strong_slice, weak_slice
 
 
 if __name__ == '__main__':
@@ -207,32 +265,36 @@ if __name__ == '__main__':
     logger.info("Baseline 2020")
     logger.info(f"Starting time: {datetime.datetime.now()}")
     parser = argparse.ArgumentParser(description="")
-    parser.add_argument("-s", '--subpart_data', type=int, default=None, dest="subpart_data",
+    parser.add_argument("-sb", '--subsets', nargs='+', default=["weak", "unlabel", "synthetic"],
+                        help="choose a subset of the data, if multiple separated per space. Example:"
+                             "'-sb weak unlabel' subset possibilities: {'weak', 'unlabel', 'synthetic'}")
+    parser.add_argument("-bs", "--batch_sizes", nargs='+', default=None,
+                        help="The number of each subset per batch. "
+                             "Number of batch_sizes should be equal to the number of subsets.")
+    parser.add_argument("-snr", "--noise_snr", type=float, default=cfg.noise_snr)
+    parser.add_argument("-s", '--subpart_data', type=int, default=None,
                         help="Number of files to be used. Useful when testing on small number of files.")
-
-    parser.add_argument("-n", '--no_synthetic', dest='no_synthetic', action='store_true', default=False,
-                        help="Not using synthetic labels during training")
     f_args = parser.parse_args()
     pprint(vars(f_args))
 
     reduced_number_of_data = f_args.subpart_data
-    no_synthetic = f_args.no_synthetic
+    subset_list = f_args.subsets
+    batch_sizes = f_args.batch_sizes
+    noise_snr = f_args.noise_snr
 
-    if no_synthetic:
-        add_dir_model_name = "_no_synthetic"
+    if subset_list is None:
+        subset_list = ["synthetic", "unlabel", "weak"]
     else:
-        add_dir_model_name = "_with_synthetic"
+        for val in subset_list:
+            if val not in ["synthetic", "unlabel", "weak"]:
+                raise NotImplementedError("Available subsets are: 'synthetic', 'unlabel' and 'weak'")
+        subset_list.sort()
 
-    store_dir = os.path.join("stored_data", "MeanTeacher" + add_dir_model_name)
-    saved_model_dir = os.path.join(store_dir, "model")
-    saved_pred_dir = os.path.join(store_dir, "predictions")
-    os.makedirs(store_dir, exist_ok=True)
-    os.makedirs(saved_model_dir, exist_ok=True)
-    os.makedirs(saved_pred_dir, exist_ok=True)
-
+    # ##########
+    # General params
+    # #########
     n_channel = 1
     add_axis_conv = 0
-
     # Model taken from 2nd of dcase19 challenge: see Delphin-Poulat2019 in the results.
     n_layers = 7
     crnn_kwargs = {"n_in_channel": n_channel, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 128,
@@ -247,62 +309,61 @@ if __name__ == '__main__':
     out_nb_frames_1s = cfg.sample_rate / cfg.hop_size / pooling_time_ratio
     median_window = max(int(cfg.median_window_s * out_nb_frames_1s), 1)
     logger.debug(f"median_window: {median_window}")
-    # ##############
-    # DATA
-    # ##############
-    dataset = DESED(base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
-                    compute_log=False)
-    dfs = get_dfs(dataset, reduced_number_of_data)
+
+    # Path to save model and preds
+    add_dir_model_name = set_model_name(subset_list)
+    store_dir = os.path.join("stored_data", "MeanTeacher" + add_dir_model_name)
+    saved_model_dir = os.path.join(store_dir, "model")
+    saved_pred_dir = os.path.join(store_dir, "predictions")
+    os.makedirs(store_dir, exist_ok=True)
+    os.makedirs(saved_model_dir, exist_ok=True)
+    os.makedirs(saved_pred_dir, exist_ok=True)
 
     # Meta path for psds
     durations_synth = get_durations_df(cfg.synthetic)
     many_hot_encoder = ManyHotEncoder(cfg.classes, n_frames=cfg.max_frames // pooling_time_ratio)
     encod_func = many_hot_encoder.encode_strong_df
 
+    # ##############
+    # DATA
+    # ##############
+    dataset = DESED(base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
+                    compute_log=False)
+    dfs = get_dfs(dataset, subset_list, reduced_number_of_data)
+
+    list_dataset, batch_sizes, strong_mask, weak_mask  = set_train_dataset(subset_list, dfs, encod_func, batch_sizes)
+
     # Normalisation per audio or on the full dataset
     if cfg.scaler_type == "dataset":
         transforms = get_transforms(cfg.max_frames, add_axis=add_axis_conv)
-        weak_data = DataLoadDf(dfs["weak"], encod_func, transforms)
-        unlabel_data = DataLoadDf(dfs["unlabel"], encod_func, transforms)
-        train_synth_data = DataLoadDf(dfs["train_synthetic"], encod_func, transforms)
+        for dset in list_dataset:
+            dset.set_transform(transforms)
         scaler_args = []
         scaler = Scaler()
         # # Only on real data since that's our final goal and test data are real
-        scaler.calculate_scaler(ConcatDataset([weak_data, unlabel_data, train_synth_data]))
+        scaler.calculate_scaler(ConcatDataset(list_dataset))
         logger.debug(f"scaler mean: {scaler.mean_}")
     else:
         scaler_args = ["global", "min-max"]
         scaler = ScalerPerAudio(*scaler_args)
 
     transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv,
-                                noise_dict_params={"mean": 0., "snr": cfg.noise_snr})
-    transforms_valid = get_transforms(cfg.max_frames, scaler, add_axis_conv)
-
-    weak_data = DataLoadDf(dfs["weak"], encod_func, transforms, in_memory=cfg.in_memory)
-    unlabel_data = DataLoadDf(dfs["unlabel"], encod_func, transforms, in_memory=cfg.in_memory_unlab)
-    train_synth_data = DataLoadDf(dfs["train_synthetic"], encod_func, transforms, in_memory=cfg.in_memory)
-    valid_synth_data = DataLoadDf(dfs["valid_synthetic"], encod_func, transforms_valid,
-                                  return_indexes=True, in_memory=cfg.in_memory)
-    logger.debug(f"len synth: {len(train_synth_data)}, len_unlab: {len(unlabel_data)}, len weak: {len(weak_data)}")
-
-    if not no_synthetic:
-        list_dataset = [weak_data, unlabel_data, train_synth_data]
-        batch_sizes = [cfg.batch_size//4, cfg.batch_size//2, cfg.batch_size//4]
-        strong_mask = slice((3*cfg.batch_size)//4, cfg.batch_size)
-    else:
-        list_dataset = [weak_data, unlabel_data]
-        batch_sizes = [cfg.batch_size // 4, 3 * cfg.batch_size // 4]
-        strong_mask = None
-    weak_mask = slice(batch_sizes[0])  # Assume weak data is always the first one
-
+                                noise_dict_params={"mean": 0., "snr": noise_snr})
+    for dset in list_dataset:
+        dset.set_transform(transforms)
     concat_dataset = ConcatDataset(list_dataset)
     sampler = MultiStreamBatchSampler(concat_dataset, batch_sizes=batch_sizes)
     training_loader = DataLoader(concat_dataset, batch_sampler=sampler)
+
+    transforms_valid = get_transforms(cfg.max_frames, scaler, add_axis_conv)
+    valid_synth_data = DataLoadDf(dfs["valid_synthetic"], encod_func, transforms_valid,
+                                  return_indexes=True, in_memory=cfg.in_memory)
     valid_synth_loader = DataLoader(valid_synth_data, batch_size=cfg.batch_size)
 
     # ##############
     # Model
     # ##############
+    # Model
     crnn = CRNN(**crnn_kwargs)
     pytorch_total_params = sum(p.numel() for p in crnn.parameters() if p.requires_grad)
     logger.info(crnn)
