@@ -103,7 +103,6 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
             if i == 0:
                 log.debug(f"target: {target.mean(-2)} \n Target_weak: {target_weak} \n "
                           f"Target weak mask: {target_weak[mask_weak]} \n "
-                          f"Target strong mask: {target[mask_strong].sum(-2)}\n"
                           f"weak loss: {weak_class_loss} \t rampup_value: {rampup_value}"
                           f"tensor mean: {batch_input.mean()}")
             meters.update('weak_class_loss', weak_class_loss.item())
@@ -112,15 +111,16 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
         # Strong BCE loss
         if mask_strong is not None:
             strong_class_loss = class_criterion(strong_pred[mask_strong], target[mask_strong])
-            meters.update('Strong loss', strong_class_loss.item())
-
             strong_ema_class_loss = class_criterion(strong_pred_ema[mask_strong], target[mask_strong])
-            meters.update('Strong EMA loss', strong_ema_class_loss.item())
-
             if loss is not None:
                 loss += strong_class_loss
             else:
                 loss = strong_class_loss
+
+            if i == 0:
+                log.debug(f"Target strong mask: {target[mask_strong].sum(-2)}\n")
+            meters.update('Strong loss', strong_class_loss.item())
+            meters.update('Strong EMA loss', strong_ema_class_loss.item())
 
         # Teacher-student consistency cost
         if ema_model is not None:
@@ -213,6 +213,7 @@ def set_model_name(subsets):
 def set_train_dataset(subsets, dfs_dict, encoding_func=None, batch_nbs=None):
     # By default batch sizes
     if batch_nbs is None:
+        subsets.sort()
         if subsets == ["synthetic", "unlabel", "weak"]:
             batch_nbs = [cfg.batch_size//4, cfg.batch_size//2, cfg.batch_size//4]
         elif subsets == ["unlabel", "weak"]:
@@ -230,9 +231,9 @@ def set_train_dataset(subsets, dfs_dict, encoding_func=None, batch_nbs=None):
     batch_szs = []
     list_data = []
     if "synthetic" in subsets:
-        prob_synth = batch_nbs[subsets.index("synthetic")]
-        batch_szs.append(prob_synth)
-        strong_slice = slice(prob_synth)
+        bs_synth = batch_nbs[subsets.index("synthetic")]
+        batch_szs.append(bs_synth)
+        strong_slice = slice(bs_synth)
         synth_data = DataLoadDf(dfs_dict["train_synthetic"], encoding_func, in_memory=cfg.in_memory)
         list_data.append(synth_data)
         logger.debug(f"len synthetic: {len(synth_data)}")
@@ -246,14 +247,19 @@ def set_train_dataset(subsets, dfs_dict, encoding_func=None, batch_nbs=None):
         logger.debug(f"len synthetic: {len(unlabel_data)}")
 
     if "weak" in subsets:
-        prob_weak = batch_nbs[subsets.index("weak")]
-        batch_szs.append(prob_weak)
-        weak_slice = slice(cfg.batch_size - prob_weak, cfg.batch_size)
+        bs_weak = batch_nbs[subsets.index("weak")]
+        batch_szs.append(bs_weak)
+        weak_slice = slice(sum(batch_sizes) - bs_weak, sum(batch_sizes))
         weak_data = DataLoadDf(dfs_dict["weak"], encoding_func, in_memory=cfg.in_memory)
         list_data.append(weak_data)
         logger.debug(f"len synthetic: {len(weak_data)}")
     else:
         weak_slice = None
+
+    logger.debug(f"len data: {[len(dt) for dt in list_data]}\n"
+                 f"batch_szs: {batch_sizes}\n"
+                 f"strong mask {strong_slice}\n"
+                 f"weak mask: {weak_slice}")
 
     return list_data, batch_szs, strong_slice, weak_slice
 
@@ -268,7 +274,7 @@ if __name__ == '__main__':
     parser.add_argument("-sb", '--subsets', nargs='+', default=["weak", "unlabel", "synthetic"],
                         help="choose a subset of the data, if multiple separated per space. Example:"
                              "'-sb weak unlabel' subset possibilities: {'weak', 'unlabel', 'synthetic'}")
-    parser.add_argument("-bs", "--batch_sizes", nargs='+', default=None,
+    parser.add_argument("-bs", "--batch_sizes", type=int, nargs='+', default=None,
                         help="The number of each subset per batch. "
                              "Number of batch_sizes should be equal to the number of subsets.")
     parser.add_argument("-snr", "--noise_snr", type=float, default=cfg.noise_snr)
@@ -288,7 +294,6 @@ if __name__ == '__main__':
         for val in subset_list:
             if val not in ["synthetic", "unlabel", "weak"]:
                 raise NotImplementedError("Available subsets are: 'synthetic', 'unlabel' and 'weak'")
-        subset_list.sort()
 
     # ##########
     # General params
@@ -331,7 +336,7 @@ if __name__ == '__main__':
                     compute_log=False)
     dfs = get_dfs(dataset, subset_list, reduced_number_of_data)
 
-    list_dataset, batch_sizes, strong_mask, weak_mask  = set_train_dataset(subset_list, dfs, encod_func, batch_sizes)
+    list_dataset, batch_sizes, strong_mask, weak_mask = set_train_dataset(subset_list, dfs, encod_func, batch_sizes)
 
     # Normalisation per audio or on the full dataset
     if cfg.scaler_type == "dataset":
