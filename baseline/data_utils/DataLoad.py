@@ -36,7 +36,7 @@ class DataLoadDf(Dataset):
         transform : function(), function to be applied to the sample (pytorch transformations)
         return_indexes: bool, whether or not to return indexes when use __getitem__
     """
-    def __init__(self, df, encode_function, transform=None, return_indexes=False, in_memory=False):
+    def __init__(self, df, encode_function=None, transform=None, return_indexes=False, in_memory=False):
         self.df = df
         self.encode_function = encode_function
         self.transform = transform
