@@ -38,6 +38,8 @@ class ManyHotEncoder:
             if labels == "empty":
                 y = np.zeros(len(self.labels)) - 1
                 return y
+            else:
+                labels = labels.split(",")
         if type(labels) is pd.DataFrame:
             if labels.empty:
                 labels = []
