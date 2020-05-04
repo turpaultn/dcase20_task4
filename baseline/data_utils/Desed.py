@@ -326,8 +326,7 @@ class DESED:
             raise NotImplementedError("if audio_dir_ss is not None, you must specify a pattern_ss")
 
         df_features = pd.DataFrame()
-        fpaths = df_meta["filename"]
-        uniq_fpaths = fpaths.drop_duplicates().to_list()
+        uniq_fpaths = df_meta["filename"].drop_duplicates().to_list()
 
         extract_file_func = functools.partial(self._extract_features_file,
                                               audio_dir=audio_dir,
@@ -341,7 +340,7 @@ class DESED:
         logger.info(f"Using {n_jobs} cpus")
         with closing(multiprocessing.Pool(n_jobs)) as p:
             for filename, out_path in tqdm(p.imap_unordered(extract_file_func, uniq_fpaths, 200), total=len(uniq_fpaths)):
-                row_features = df_meta[df_meta.filename == filename]
+                row_features = df_meta[df_meta.filename == filename].copy()
                 row_features.loc[:, "feature_filename"] = out_path
                 df_features = df_features.append(row_features, ignore_index=True)
 

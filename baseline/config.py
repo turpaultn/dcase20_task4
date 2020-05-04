@@ -12,13 +12,11 @@ validation = os.path.join(workspace, 'dataset/metadata/validation/validation.tsv
 test2018 = os.path.join(workspace, 'dataset/metadata/validation/test_dcase2018.tsv')
 eval2018 = os.path.join(workspace, 'dataset/metadata/validation/eval_dcase2018.tsv')
 eval_desed = os.path.join(workspace, "dataset/metadata/eval/public.tsv")
-# Useful because does not correspond to the tsv file path (metadata replace by audio), (due to subsets test/eval2018)
-audio_validation_dir = os.path.join(workspace, 'dataset/audio/validation')
 # Separated data
 weak_ss = os.path.join(workspace, 'dataset/audio/train/weak_ss/separated_sources')
 unlabel_ss = os.path.join(workspace, 'dataset/audio/train/unlabel_in_domain_ss/separated_sources')
 synthetic_ss = os.path.join(workspace, 'dataset/audio/train/synthetic20/separated_sources')
-validation_ss = os.path.join(workspace, 'dataset/audio/validation_ss/separated_sources')
+validation_ss = os.path.join(workspace, 'dataset/audio/validation/validation_ss/separated_sources')
 eval_desed_ss = os.path.join(workspace, "dataset/audio/eval/public_ss/separated_sources")
 
 # Scaling data
@@ -64,4 +62,4 @@ median_window_s = 0.45
 file_path = os.path.abspath(os.path.dirname(__file__))
 classes = pd.read_csv(os.path.join(file_path, validation), sep="\t").event_label.dropna().sort_values().unique()
 # Logger
-terminal_level = logging.INFO
+terminal_level = logging.DEBUG

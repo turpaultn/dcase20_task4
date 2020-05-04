@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     download_from_csv(
         os.path.join(dataset_folder, "metadata", "validation", "validation.tsv"),
-        os.path.join(dataset_folder, "audio", "validation"),
+        os.path.join(dataset_folder, "audio", "validation", "validation"),
         base_missing_files_folder
     )
 

@@ -16,7 +16,8 @@ from torch import nn
 from data_utils.Desed import DESED
 from data_utils.DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler
 from TestModel import _load_crnn
-from evaluation_measures import get_predictions, psds_score, compute_psds_from_operating_points, compute_metrics
+from evaluation_measures import get_predictions, psds_score, compute_psds_from_operating_points, compute_metrics, \
+    audio_tagging_results
 from models.CRNN import CRNN
 import config as cfg
 from utilities import ramps
@@ -177,11 +178,11 @@ def get_dfs(desed_dataset, subsets, nb_files=None, separated_sources=False):
     synthetic_df = desed_dataset.initialize_and_get_df(cfg.synthetic, audio_dir_ss=audio_synthetic_ss,
                                                        nb_files=nb_files, download=False)
     log.debug(f"synthetic: {synthetic_df.head()}")
-    validation_df = desed_dataset.initialize_and_get_df(cfg.validation, audio_dir=cfg.audio_validation_dir,
+    validation_df = desed_dataset.initialize_and_get_df(cfg.validation,
                                                         audio_dir_ss=audio_validation_ss, nb_files=nb_files)
     # Divide synthetic in train and valid
     filenames_train = synthetic_df.filename.drop_duplicates().sample(frac=0.8, random_state=26)
-    train_synth_df = synthetic_df[synthetic_df.filename.isin(filenames_train)]
+    train_synth_df = synthetic_df[synthetic_df.filename.isin(filenames_train)].copy()
     valid_synth_df = synthetic_df.drop(train_synth_df.index).reset_index(drop=True)
     # Put train_synth in frames so many_hot_encoder can work.
     #  Not doing it for valid, because not using labels (when prediction) and event based metric expect sec.
@@ -477,7 +478,7 @@ if __name__ == '__main__':
     validation_data = DataLoadDf(dfs["validation"], encod_func, transform=transforms_valid, return_indexes=True)
     validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
     validation_labels_df = dfs["validation"].drop("feature_filename", axis=1)
-    durations_validation = get_durations_df(cfg.validation, cfg.audio_validation_dir)
+    durations_validation = get_durations_df(cfg.validation)
     # Preds with only one value
     valid_predictions = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
                                         pooling_time_ratio, median_window=median_window,
