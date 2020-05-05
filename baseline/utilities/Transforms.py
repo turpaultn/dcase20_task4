@@ -44,32 +44,6 @@ class Transform:
         return sample
 
 
-class GaussianNoise(Transform):
-    """ Apply gaussian noise
-        Args:
-            mean: float, the mean of the gaussian distribution.
-            std: float, standard deviation of the gaussian distribution.
-        Attributes:
-            mean: float, the mean of the gaussian distribution.
-            std: float, standard deviation of the gaussian distribution.
-        """
-
-    def __init__(self, mean=0, std=0.5):
-        self.mean = mean
-        self.std = std
-
-    def transform_data(self, data):
-        """ Apply the transformation on data
-        Args:
-            data: np.array, the data to be modified
-
-        Returns:
-            np.array
-            The transformed data
-        """
-        return data + np.abs(np.random.normal(0, 0.5 ** 2, data.shape))
-
-
 class ApplyLog(Transform):
     """Convert ndarrays in sample to Tensors."""
 
@@ -279,25 +253,6 @@ class CombineChannels(Transform):
         return np.concatenate((mix, sources[indexes_sorted[2:]]))
 
 
-def get_transforms(frames, scaler=None, add_axis=0, noise_dict_params=None, combine_channels_args=None):
-    transf = []
-    unsqueeze_axis = None
-    if add_axis is not None:
-        unsqueeze_axis = add_axis
-
-    if combine_channels_args is not None:
-        transf.append(CombineChannels(*combine_channels_args))
-
-    if noise_dict_params is not None:
-        transf.append(AugmentGaussianNoise(**noise_dict_params))
-
-    transf.extend([ApplyLog(), PadOrTrunc(nb_frames=frames), ToTensor(unsqueeze_axis=unsqueeze_axis)])
-    if scaler is not None:
-        transf.append(Normalize(scaler=scaler))
-
-    return Compose(transf)
-
-
 class Compose(object):
     """Composes several transforms together.
     Args:
@@ -326,3 +281,28 @@ class Compose(object):
         format_string += '\n)'
 
         return format_string
+
+
+def get_transforms(frames=None, scaler=None, add_axis=0, noise_dict_params=None, combine_channels_args=None):
+    transf = []
+    unsqueeze_axis = None
+    if add_axis is not None:
+        unsqueeze_axis = add_axis
+
+    if combine_channels_args is not None:
+        transf.append(CombineChannels(*combine_channels_args))
+
+    if noise_dict_params is not None:
+        transf.append(AugmentGaussianNoise(**noise_dict_params))
+
+    transf.append(ApplyLog())
+
+    if frames is not None:
+        transf.append(PadOrTrunc(nb_frames=frames))
+
+    transf.append(ToTensor(unsqueeze_axis=unsqueeze_axis))
+
+    if scaler is not None:
+        transf.append(Normalize(scaler=scaler))
+
+    return Compose(transf)
