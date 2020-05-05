@@ -261,7 +261,7 @@ def get_f_measure_by_class(torch_model, nb_tags, dataloader_, thresholds_=None):
     Args:
         torch_model : Model, model to get predictions, forward should return weak and strong predictions
         nb_tags : int, number of classes which are represented
-        dataloader_ : generator, data generator used to get f_measure
+        dataloader_ : generator, data generator used to get f_measure. Giving ((input_features, label), indexes)
         thresholds_ : int or list, thresholds to apply to each class to binarize probabilities
 
     Returns:
@@ -276,7 +276,7 @@ def get_f_measure_by_class(torch_model, nb_tags, dataloader_, thresholds_=None):
     tn = np.zeros(nb_tags)
     fp = np.zeros(nb_tags)
     fn = np.zeros(nb_tags)
-    for counter, (batch_x, y) in enumerate(dataloader_):
+    for counter, ((batch_x, y), indexes) in enumerate(dataloader_):
         if torch.cuda.is_available():
             batch_x = batch_x.cuda()
 

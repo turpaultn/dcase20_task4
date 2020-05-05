@@ -7,7 +7,8 @@ workspace = ".."
 # DESED Paths
 weak = os.path.join(workspace, 'dataset/metadata/train/weak.tsv')
 unlabel = os.path.join(workspace, 'dataset/metadata/train/unlabel_in_domain.tsv')
-synthetic = os.path.join(workspace, 'dataset/metadata/train/synthetic20/soundscapes.tsv')
+train_synth = os.path.join(workspace, 'dataset/metadata/train/synthetic20_train/soundscapes.tsv')
+valid_synth = os.path.join(workspace, 'dataset/metadata/validation/synthetic20_validation/soundscapes.tsv')
 validation = os.path.join(workspace, 'dataset/metadata/validation/validation.tsv')
 test2018 = os.path.join(workspace, 'dataset/metadata/validation/test_dcase2018.tsv')
 eval2018 = os.path.join(workspace, 'dataset/metadata/validation/eval_dcase2018.tsv')

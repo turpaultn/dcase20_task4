@@ -17,7 +17,7 @@ from data_utils.Desed import DESED
 from data_utils.DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler
 from TestModel import _load_crnn
 from evaluation_measures import get_predictions, psds_score, compute_psds_from_operating_points, compute_metrics, \
-    audio_tagging_results
+    audio_tagging_results, get_f_measure_by_class
 from models.CRNN import CRNN
 import config as cfg
 from utilities import ramps
@@ -161,41 +161,45 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
 
 
 def get_dfs(desed_dataset, subsets, nb_files=None, separated_sources=False):
-    data_dfs = {}
     log = create_logger(__name__ + "/" + inspect.currentframe().f_code.co_name, terminal_level=cfg.terminal_level)
     audio_unlabel_ss = cfg.unlabel_ss if separated_sources else None
     audio_validation_ss = cfg.validation_ss if separated_sources else None
     audio_synthetic_ss = cfg.synthetic_ss if separated_sources else None
 
-    if "weak" in subsets:
-        audio_weak_ss = cfg.weak_ss if separated_sources else None
-        weak_df = desed_dataset.initialize_and_get_df(cfg.weak, audio_dir_ss=audio_weak_ss, nb_files=nb_files)
-        data_dfs["weak"] = weak_df
-    if "unlabel" in subsets:
-        unlabel_df = desed_dataset.initialize_and_get_df(cfg.unlabel, audio_dir_ss=audio_unlabel_ss, nb_files=nb_files)
-        data_dfs["unlabel"] = unlabel_df
+    # Always take weak since we need the validation part
+    audio_weak_ss = cfg.weak_ss if separated_sources else None
+    weak_df = desed_dataset.initialize_and_get_df(cfg.weak, audio_dir_ss=audio_weak_ss, nb_files=nb_files)
+    train_weak_df = weak_df.sample(frac=0.9)
+    valid_weak_df = weak_df.drop(train_weak_df.index).reset_index(drop=True)
+    train_weak_df = train_weak_df.reset_index(drop=True)
+
     # Event if synthetic not used for training, used on validation purpose
-    synthetic_df = desed_dataset.initialize_and_get_df(cfg.synthetic, audio_dir_ss=audio_synthetic_ss,
-                                                       nb_files=nb_files, download=False)
-    log.debug(f"synthetic: {synthetic_df.head()}")
+    train_synth_df = desed_dataset.initialize_and_get_df(cfg.train_synth, audio_dir_ss=audio_synthetic_ss,
+                                                         nb_files=nb_files, download=False)
+    valid_synth_df = desed_dataset.initialize_and_get_df(cfg.valid_synth, audio_dir_ss=audio_synthetic_ss,
+                                                         nb_files=nb_files, download=False)
+    log.debug(f"synthetic: {train_synth_df.head()}")
     validation_df = desed_dataset.initialize_and_get_df(cfg.validation,
                                                         audio_dir_ss=audio_validation_ss, nb_files=nb_files)
-    # Divide synthetic in train and valid
-    filenames_train = synthetic_df.filename.drop_duplicates().sample(frac=0.8, random_state=26)
-    train_synth_df = synthetic_df[synthetic_df.filename.isin(filenames_train)].copy()
-    valid_synth_df = synthetic_df.drop(train_synth_df.index).reset_index(drop=True)
+    # Todo find a better way to avoid that
     # Put train_synth in frames so many_hot_encoder can work.
-    #  Not doing it for valid, because not using labels (when prediction) and event based metric expect sec.
+    # Not doing it for valid, because not using labels (when prediction) and event based metric expect sec.
     train_synth_df.onset = train_synth_df.onset * cfg.sample_rate // cfg.hop_size // pooling_time_ratio
     train_synth_df.offset = train_synth_df.offset * cfg.sample_rate // cfg.hop_size // pooling_time_ratio
     log.debug(valid_synth_df.event_label.value_counts())
 
-    data_dfs.update({
-        "synthetic": synthetic_df,
+    data_dfs = {
+        "train_weak": train_weak_df,
+        "valid_weak": valid_weak_df,
         "train_synthetic": train_synth_df,
         "valid_synthetic": valid_synth_df,
         "validation": validation_df,
-    })
+    }
+
+    # Unlabel is only for training
+    if "unlabel" in subsets:
+        unlabel_df = desed_dataset.initialize_and_get_df(cfg.unlabel, audio_dir_ss=audio_unlabel_ss, nb_files=nb_files)
+        data_dfs["unlabel"] = unlabel_df
 
     return data_dfs
 
@@ -250,15 +254,15 @@ def set_train_dataset(subsets, dfs_dict, encoding_func=None, batch_nbs=None):
     if "weak" in subsets:
         bs_weak = batch_nbs[subsets.index("weak")]
         batch_szs.append(bs_weak)
-        weak_slice = slice(sum(batch_sizes) - bs_weak, sum(batch_sizes))
-        weak_data = DataLoadDf(dfs_dict["weak"], encoding_func, in_memory=cfg.in_memory)
+        weak_slice = slice(sum(batch_nbs) - bs_weak, sum(batch_nbs))
+        weak_data = DataLoadDf(dfs_dict["train_weak"], encoding_func, in_memory=cfg.in_memory)
         list_data.append(weak_data)
         logger.debug(f"len synthetic: {len(weak_data)}")
     else:
         weak_slice = None
 
     logger.debug(f"len data: {[len(dt) for dt in list_data]}\n"
-                 f"batch_szs: {batch_sizes}\n"
+                 f"batch_szs: {batch_szs}\n"
                  f"strong mask {strong_slice}\n"
                  f"weak mask: {weak_slice}")
 
@@ -326,7 +330,7 @@ if __name__ == '__main__':
     os.makedirs(saved_pred_dir, exist_ok=True)
 
     # Meta path for psds
-    durations_synth = get_durations_df(cfg.synthetic)
+    durations_valid_synth = get_durations_df(cfg.valid_synth)
     many_hot_encoder = ManyHotEncoder(cfg.classes, n_frames=cfg.max_frames // pooling_time_ratio)
     encod_func = many_hot_encoder.encode_strong_df
 
@@ -365,6 +369,10 @@ if __name__ == '__main__':
     valid_synth_data = DataLoadDf(dfs["valid_synthetic"], encod_func, transforms_valid,
                                   return_indexes=True, in_memory=cfg.in_memory)
     valid_synth_loader = DataLoader(valid_synth_data, batch_size=cfg.batch_size)
+
+    valid_weak_data = DataLoadDf(dfs["valid_weak"], encod_func, transforms_valid,
+                                 return_indexes=True, in_memory=cfg.in_memory)
+    valid_weak_loader = DataLoader(valid_weak_data, batch_size=cfg.batch_size)
 
     # ##############
     # Model
@@ -431,8 +439,11 @@ if __name__ == '__main__':
                                       median_window=median_window, save_predictions=None)
         # Validation with synthetic data (dropping feature_filename for psds)
         valid_synth = dfs["valid_synthetic"].drop("feature_filename", axis=1)
-        valid_synth_f1, psds_m_f1 = compute_metrics(predictions, valid_synth, durations_synth)
+        valid_synth_f1, psds_m_f1 = compute_metrics(predictions, valid_synth, durations_valid_synth)
 
+        valid_weak_f1_pc = get_f_measure_by_class(crnn, len(many_hot_encoder.labels), valid_weak_loader)
+        valid_weak_f1 = np.mean(valid_weak_f1_pc)
+        logger.info(f"\n ### Valid weak metric \n F1 per class: {valid_weak_f1_pc} \n Macro average: {valid_weak_f1}")
         # Update state
         state['model']['state_dict'] = crnn.state_dict()
         state['model_ema']['state_dict'] = crnn_ema.state_dict()
@@ -440,7 +451,9 @@ if __name__ == '__main__':
         state['epoch'] = epoch
         state['valid_metric'] = valid_synth_f1
         state['valid_f1_psds'] = psds_m_f1
+        state['valid_weak_f1'] = valid_weak_f1
 
+        global_valid = valid_weak_f1 + valid_synth_f1
         # Callbacks
         if cfg.checkpoint_epochs is not None and (epoch + 1) % cfg.checkpoint_epochs == 0:
             model_fname = os.path.join(saved_model_dir, "baseline_epoch_" + str(epoch))
@@ -450,12 +463,12 @@ if __name__ == '__main__':
             if save_best_cb.apply(valid_synth_f1):
                 model_fname = os.path.join(saved_model_dir, "baseline_best")
                 torch.save(state, model_fname)
-            results.loc[epoch, "global_valid"] = valid_synth_f1
+            results.loc[epoch, "global_valid"] = global_valid
         results.loc[epoch, "loss"] = loss_value.item()
         results.loc[epoch, "valid_synth_f1"] = valid_synth_f1
 
         if cfg.early_stopping:
-            if early_stopping_call.apply(valid_synth_f1):
+            if early_stopping_call.apply(global_valid):
                 logger.warn("EARLY STOPPING")
                 break
 
