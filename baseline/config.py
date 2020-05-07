@@ -63,4 +63,4 @@ median_window_s = 0.45
 file_path = os.path.abspath(os.path.dirname(__file__))
 classes = pd.read_csv(os.path.join(file_path, validation), sep="\t").event_label.dropna().sort_values().unique()
 # Logger
-terminal_level = logging.DEBUG
+terminal_level = logging.INFO

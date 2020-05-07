@@ -291,7 +291,7 @@ def audio_dir_to_meta_path(audio_dir):
 
 def get_durations_df(gtruth_path, audio_dir=None):
     if audio_dir is None:
-        audio_dir = meta_path_to_audio_dir(cfg.synthetic)
+        audio_dir = meta_path_to_audio_dir(gtruth_path)
     path, ext = os.path.splitext(gtruth_path)
     path_durations_synth = path + "_durations" + ext
     if not os.path.exists(path_durations_synth):

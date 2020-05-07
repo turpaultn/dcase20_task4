@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import argparse
+import functools
+import multiprocessing
 import os.path as osp
+from contextlib import closing
 
 import torch
 from torch.utils.data import DataLoader
@@ -99,6 +102,41 @@ def get_variables(args):
     return model_pth, median_win, gt_audio_pth, groundtruth, meta_dur_df
 
 
+class NoDaemonProcess(multiprocessing.Process):
+    # make 'daemon' attribute always return False
+    def _get_daemon(self):
+        return False
+
+    def _set_daemon(self, value):
+        pass
+    daemon = property(_get_daemon, _set_daemon)
+
+
+class MyPool(multiprocessing.pool.Pool):
+    # We sub-class multiprocessing.pool.Pool instead of multiprocessing.Pool
+    # because the latter is only a wrapper function, not a proper class.
+    Process = NoDaemonProcess
+
+
+def bootstrap_iter(gtruth, pred, durations, metric, frac, _):
+    names_kept = pred.filename.drop_duplicates().sample(frac=frac)
+    pred_bt = pred[pred.filename.isin(names_kept)]
+    gt_bt = gtruth[gtruth.filename.isin(names_kept)]
+    m = metric(pred_bt, gt_bt, durations, verbose=False)
+    return m
+
+
+def bootstrap(pred, gtruth, durations, metric, n_iterations=200, frac=0.8, confidence=0.9):
+    bt_iter = functools.partial(bootstrap_iter, gtruth, pred, durations, metric, frac)
+    with closing(MyPool(multiprocessing.cpu_count() - 1)) as pool:
+        result_metrics = pool.map(bt_iter, range(n_iterations))
+    result_metrics.sort()
+    mean_val = np.mean(result_metrics)
+    lower = np.percentile(result_metrics, ((1 - confidence) / 2) * 100)
+    upper = np.percentile(result_metrics, (confidence + ((1 - confidence) / 2)) * 100)
+    return mean_val, lower, upper
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("-m", '--model_path', type=str, required=True,
@@ -139,7 +177,10 @@ if __name__ == '__main__':
                                          params["many_hot_encoder"].decode_strong, params["pooling_time_ratio"],
                                          median_window=params["median_window"],
                                          save_predictions=f_args.save_predictions_path)
-    compute_metrics(single_predictions, groundtruth, durations)
+
+    mean_f1, lf1, uf1 = bootstrap(single_predictions, groundtruth, durations, compute_metrics)
+    logger.info(f"f1 score: {mean_f1} -{lf1} +{uf1}")
+    # f1_macro = compute_metrics(single_predictions, groundtruth, durations)
 
     # ##########
     # Optional but recommended
@@ -148,13 +189,19 @@ if __name__ == '__main__':
     n_thresholds = 50
     # Example of 5 thresholds: 0.1, 0.3, 0.5, 0.7, 0.9
     list_thresholds = np.arange(1 / (n_thresholds * 2), 1, 1 / n_thresholds)
-    pred_ss_thresh = get_predictions(params["model"], params["dataloader"],
-                                     params["many_hot_encoder"].decode_strong, params["pooling_time_ratio"],
-                                     thresholds=list_thresholds, median_window=params["median_window"],
-                                     save_predictions=f_args.save_predictions_path)
-    psds = compute_psds_from_operating_points(pred_ss_thresh, groundtruth, durations)
-    fname_roc = None
-    if f_args.save_predictions_path is not None:
-        fname_roc = osp.splitext(f_args.save_predictions_path)[0] + "_roc.png"
-    psds_score(psds, filename_roc_curves=fname_roc)
+    pred_thresh = get_predictions(params["model"], params["dataloader"],
+                                  params["many_hot_encoder"].decode_strong, params["pooling_time_ratio"],
+                                  thresholds=list_thresholds, median_window=params["median_window"],
+                                  save_predictions=f_args.save_predictions_path)
+    # psds = compute_psds_from_operating_points(pred_thresh, groundtruth, durations)
+    # fname_roc = None
+    # if f_args.save_predictions_path is not None:
+    #     fname_roc = osp.splitext(f_args.save_predictions_path)[0] + "_roc.png"
+    # psds_ct = psds_score(psds, filename_roc_curves=fname_roc)
 
+    def get_psds_score(pred_thresh, groundtruth, durations, verbose=False):
+        psds = compute_psds_from_operating_points(pred_thresh, groundtruth, durations)
+        psds_ct = psds_score(psds, verbose=verbose)
+        return psds_ct
+    mean_psds, lpsds, upsds = bootstrap(pred_thresh, groundtruth, durations, get_psds_score)
+    logger.info(f"f1 score: {mean_psds} -{lpsds} +{upsds}")
