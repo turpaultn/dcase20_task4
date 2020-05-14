@@ -16,7 +16,7 @@ from torch import nn
 import config as cfg
 
 
-def read_audio(path, target_fs=None):
+def read_audio(path, target_fs=None, **kwargs):
     """ Read a wav file
     Args:
         path: str, path of the audio file
@@ -28,7 +28,7 @@ def read_audio(path, target_fs=None):
         (numpy.array, sampling rate), array containing the audio at the sampling rate given
 
     """
-    (audio, fs) = soundfile.read(path)
+    (audio, fs) = soundfile.read(path, **kwargs)
     if audio.ndim > 1:
         audio = np.mean(audio, axis=1)
     if target_fs is not None and fs != target_fs:
@@ -291,7 +291,7 @@ def audio_dir_to_meta_path(audio_dir):
 
 def get_durations_df(gtruth_path, audio_dir=None):
     if audio_dir is None:
-        audio_dir = meta_path_to_audio_dir(cfg.synthetic)
+        audio_dir = meta_path_to_audio_dir(gtruth_path)
     path, ext = os.path.splitext(gtruth_path)
     path_durations_synth = path + "_durations" + ext
     if not os.path.exists(path_durations_synth):
