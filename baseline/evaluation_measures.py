@@ -420,4 +420,4 @@ def compute_metrics(predictions, gtruth_df, meta_df, verbose=True):
     psds_macro_f1, psds_f1_classes = psds.compute_macro_f_score(predictions)
     if verbose:
         logger.info(f"F1_score (psds_eval) accounting cross triggers: {psds_macro_f1}")
-    return macro_f1_event
+    return macro_f1_event, psds_macro_f1

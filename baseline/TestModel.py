@@ -13,7 +13,7 @@ import pandas as pd
 from data_utils.DataLoad import DataLoadDf
 from data_utils.Desed import DESED
 from evaluation_measures import psds_score, get_predictions, \
-    compute_psds_from_operating_points, compute_metrics
+    compute_psds_from_operating_points, compute_metrics, compute_sed_eval_metrics
 from utilities.utils import to_cuda_if_available, generate_tsv_wav_durations, meta_path_to_audio_dir
 from utilities.ManyHotEncoder import ManyHotEncoder
 from utilities.Transforms import get_transforms
@@ -118,16 +118,21 @@ class MyPool(multiprocessing.pool.Pool):
     Process = NoDaemonProcess
 
 
-def bootstrap_iter(gtruth, pred, durations, metric, frac, _):
-    names_kept = pred.filename.drop_duplicates().sample(frac=frac)
-    pred_bt = pred[pred.filename.isin(names_kept)]
+def bootstrap_iter(pred, gtruth, metric, frac, _, **kwargs):
+    names_kept = gtruth.filename.drop_duplicates().sample(frac=frac)
+    if isinstance(pred, list):
+        pred_bt = []
+        for pdf in pred:
+            pred_bt.append(pdf[pdf.filename.isin(names_kept)])
+    else:
+        pred_bt = pred[pred.filename.isin(names_kept)]
     gt_bt = gtruth[gtruth.filename.isin(names_kept)]
-    m = metric(pred_bt, gt_bt, durations, verbose=False)
+    m = metric(pred_bt, gt_bt, **kwargs)
     return m
 
 
-def bootstrap(pred, gtruth, durations, metric, n_iterations=200, frac=0.8, confidence=0.9):
-    bt_iter = functools.partial(bootstrap_iter, gtruth, pred, durations, metric, frac)
+def bootstrap(pred, gtruth, metric, n_iterations=200, frac=0.8, confidence=0.9, **kwargs):
+    bt_iter = functools.partial(bootstrap_iter, pred, gtruth, metric, frac, **kwargs)
     with closing(MyPool(multiprocessing.cpu_count() - 1)) as pool:
         result_metrics = pool.map(bt_iter, range(n_iterations))
     result_metrics.sort()
@@ -157,6 +162,8 @@ if __name__ == '__main__':
     parser.add_argument("-s", '--save_predictions_path', type=str, default=None,
                         help="Path for the predictions to be saved (if needed)")
 
+    parser.add_argument("-b", '--bootstrap_iterations', type=int, default=200,
+                        help="Number of bootstrap samples to take (default 200, 80% taken each iteration).")
     # Dev
     parser.add_argument("-n", '--nb_files', type=int, default=None,
                         help="Number of files to be used. Useful when testing on small number of files.")
@@ -178,7 +185,13 @@ if __name__ == '__main__':
                                          median_window=params["median_window"],
                                          save_predictions=f_args.save_predictions_path)
 
-    mean_f1, lf1, uf1 = bootstrap(single_predictions, groundtruth, durations, compute_metrics)
+    def macro_f1_func(predictions, gtruth_df, verbose=False):
+        events_metric = compute_sed_eval_metrics(predictions, gtruth_df, verbose=verbose)
+        macro_f1_event = events_metric.results_class_wise_average_metrics()['f_measure']['f_measure']
+        return macro_f1_event
+    
+    mean_f1, lf1, uf1 = bootstrap(single_predictions, groundtruth, macro_f1_func,
+                                  n_iterations=f_args.bootstrap_iterations)
     logger.info(f"f1 score: {mean_f1} -{lf1} +{uf1}")
     # f1_macro = compute_metrics(single_predictions, groundtruth, durations)
 
@@ -201,7 +214,8 @@ if __name__ == '__main__':
 
     def get_psds_score(pred_thresh, groundtruth, durations, verbose=False):
         psds = compute_psds_from_operating_points(pred_thresh, groundtruth, durations)
-        psds_ct = psds_score(psds, verbose=verbose)
+        psds_ct = psds_score(psds, verbose=verbose).value
         return psds_ct
-    mean_psds, lpsds, upsds = bootstrap(pred_thresh, groundtruth, durations, get_psds_score)
+    mean_psds, lpsds, upsds = bootstrap(pred_thresh, groundtruth, get_psds_score, durations=durations,
+                                        n_iterations=f_args.bootstrap_iterations)
     logger.info(f"f1 score: {mean_psds} -{lpsds} +{upsds}")
