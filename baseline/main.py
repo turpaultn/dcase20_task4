@@ -58,7 +58,7 @@ def update_ema_variables(model, ema_model, alpha, global_step):
         ema_params.data.mul_(alpha).add_(1 - alpha, params.data)
 
 
-def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=None, mask_strong=None, adjust_lr=False):
+def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=None, mask_strong=None, rampup=None):
     """ One epoch of a Mean Teacher model
     Args:
         train_loader: torch.utils.data.DataLoader, iterator of training batches for an epoch.
@@ -69,7 +69,7 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
         ema_model: torch.Module, student model, should return a weak and strong prediction
         mask_weak: slice or list, mask the batch to get only the weak labeled data (used to calculate the loss)
         mask_strong: slice or list, mask the batch to get only the strong labeled data (used to calcultate the loss)
-        adjust_lr: bool, Whether or not to adjust the learning rate during training (params in config)
+        rampup: bool, Whether or not to adjust the learning rate during training (params in config)
     """
     log = create_logger(__name__ + "/" + inspect.currentframe().f_code.co_name, terminal_level=cfg.terminal_level)
     class_criterion = nn.BCELoss()
@@ -81,10 +81,10 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
     start = time.time()
     for i, ((batch_input, ema_batch_input), target) in enumerate(train_loader):
         global_step = c_epoch * len(train_loader) + i
-        rampup_value = ramps.exp_rampup(global_step, cfg.n_epoch_rampup*len(train_loader))
-
-        if adjust_lr:
-            adjust_learning_rate(optimizer, rampup_value)
+        if rampup is not None:
+            rampup_value = ramps.exp_rampup(global_step, cfg.n_epoch_rampup*len(train_loader))
+            if rampup in ["lr", "all"]:
+                adjust_learning_rate(optimizer, rampup_value)
         meters.update('lr', optimizer.param_groups[0]['lr'])
         batch_input, ema_batch_input, target = to_cuda_if_available(batch_input, ema_batch_input, target)
         # Outputs
@@ -104,8 +104,10 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
             if i == 0:
                 log.debug(f"target: {target.mean(-2)} \n Target_weak: {target_weak} \n "
                           f"Target weak mask: {target_weak[mask_weak]} \n "
-                          f"weak loss: {weak_class_loss} \t rampup_value: {rampup_value}"
+                          f"weak loss: {weak_class_loss} \t"
                           f"tensor mean: {batch_input.mean()}")
+                if rampup:
+                    log.debug(f"rampup_value: {rampup_value}")
             meters.update('weak_class_loss', weak_class_loss.item())
             meters.update('Weak EMA loss', ema_class_loss.item())
 
@@ -125,18 +127,21 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
 
         # Teacher-student consistency cost
         if ema_model is not None:
-            consistency_cost = cfg.max_consistency_cost * rampup_value
-            meters.update('Consistency weight', consistency_cost)
+            if rampup in ["all", "consistency"]:
+                consistency_weight = cfg.max_consistency_cost * rampup_value
+            else:
+                consistency_weight = cfg.max_consistency_cost
+            meters.update('Consistency weight', consistency_weight)
             # Take consistency about strong predictions (all data)
-            consistency_loss_strong = consistency_cost * consistency_criterion(strong_pred, strong_pred_ema)
+            consistency_loss_strong = consistency_weight * consistency_criterion(strong_pred, strong_pred_ema)
             meters.update('Consistency strong', consistency_loss_strong.item())
             if loss is not None:
                 loss += consistency_loss_strong
             else:
                 loss = consistency_loss_strong
-            meters.update('Consistency weight', consistency_cost)
+            meters.update('Consistency weight', consistency_weight)
             # Take consistency about weak predictions (all data)
-            consistency_loss_weak = consistency_cost * consistency_criterion(weak_pred, weak_pred_ema)
+            consistency_loss_weak = consistency_weight * consistency_criterion(weak_pred, weak_pred_ema)
             meters.update('Consistency weak', consistency_loss_weak.item())
             if loss is not None:
                 loss += consistency_loss_weak
@@ -151,7 +156,6 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        global_step += 1
         if ema_model is not None:
             update_ema_variables(model, ema_model, 0.999, global_step)
 
@@ -282,9 +286,11 @@ if __name__ == '__main__':
     parser.add_argument("-bs", "--batch_sizes", type=int, nargs='+', default=None,
                         help="The number of each subset per batch. "
                              "Number of batch_sizes should be equal to the number of subsets.")
-    parser.add_argument("-snr", "--noise_snr", type=float, default=cfg.noise_snr)
+    parser.add_argument("-snr", "--noise_snr", type=float, default=30)
     parser.add_argument("-s", '--subpart_data', type=int, default=None,
                         help="Number of files to be used. Useful when testing on small number of files.")
+    parser.add_argument("-r", "--rampup", type=str, default=None,
+                        help="Rampup applied or not, possible values: {'lr', 'consistency', 'all'}")
     f_args = parser.parse_args()
     pprint(vars(f_args))
 
@@ -292,6 +298,8 @@ if __name__ == '__main__':
     subset_list = f_args.subsets
     batch_sizes = f_args.batch_sizes
     noise_snr = f_args.noise_snr
+    assert f_args.rampup in [None, "lr", "consistency", "all"], \
+        "Rampup need to be in [None, 'lr', 'consistency', 'all']"
 
     if subset_list is None:
         subset_list = ["synthetic", "unlabel", "weak"]
@@ -357,8 +365,12 @@ if __name__ == '__main__':
         scaler_args = ["global", "min-max"]
         scaler = ScalerPerAudio(*scaler_args)
 
+    if noise_snr is None:
+        noise_dict_params = None
+    else:
+        noise_dict_params = {"mean": 0., "snr": noise_snr}
     transforms = get_transforms(cfg.max_frames, scaler, add_axis_conv,
-                                noise_dict_params={"mean": 0., "snr": noise_snr})
+                                noise_dict_params=noise_dict_params, add_teacher=True)
     for dset in list_dataset:
         dset.set_transform(transforms)
     concat_dataset = ConcatDataset(list_dataset)
@@ -430,7 +442,8 @@ if __name__ == '__main__':
         crnn, crnn_ema = to_cuda_if_available(crnn, crnn_ema)
 
         loss_value = train(training_loader, crnn, optim, epoch,
-                           ema_model=crnn_ema, mask_weak=weak_mask, mask_strong=strong_mask, adjust_lr=cfg.adjust_lr)
+                           ema_model=crnn_ema, mask_weak=weak_mask, mask_strong=strong_mask,
+                           rampup=f_args.rampup)
 
         # Validation
         crnn = crnn.eval()

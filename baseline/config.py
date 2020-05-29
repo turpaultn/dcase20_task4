@@ -43,7 +43,6 @@ in_memory = True
 in_memory_unlab = False
 num_workers = 12
 batch_size = 24
-noise_snr = 30
 
 n_epoch = 200
 n_epoch_rampup = 50
@@ -52,7 +51,6 @@ checkpoint_epochs = 1
 save_best = True
 early_stopping = None
 es_init_wait = 50  # es for early stopping
-adjust_lr = True
 max_learning_rate = 0.001  # Used if adjust_lr is True
 default_learning_rate = 0.001  # Used if adjust_lr is False
 

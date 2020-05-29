@@ -136,18 +136,24 @@ class PadOrTrunc(Transform):
         return pad_trunc_seq(data, self.nb_frames)
 
 
-class AugmentGaussianNoise(Transform):
+class AddTeacherInput(Transform):
     """ Pad or truncate a sequence given a number of frames
            Args:
-               mean: float, mean of the Gaussian noise to add
-           Attributes:
-               std: float, std of the Gaussian noise to add
+               noise: dict, can contain:
+                    mean: float, mean of the Gaussian noise to add (default to 0)
+                    std: float, std of the Gaussian noise to add
+                    snr: float, average snr to be used for data augmentation
+               If none, no noise id added
            """
 
-    def __init__(self, mean=0., std=None, snr=None):
-        self.mean = mean
-        self.std = std
-        self.snr = snr
+    def __init__(self, noise=None):
+        self.noise = noise
+        if noise is not None:
+            self.mean = noise.get("mean")
+            if self.mean is None:
+                self.mean = 0.
+            self.std = noise.get("std")
+            self.snr = noise.get("snr")
 
     @staticmethod
     def gaussian_noise(features, snr):
@@ -184,12 +190,15 @@ class AugmentGaussianNoise(Transform):
                 (np.array, np.array)
                 (original data, noisy_data (data + noise))
         """
-        if self.std is not None:
-            noisy_data = data + np.abs(np.random.normal(0, 0.5 ** 2, data.shape))
-        elif self.snr is not None:
-            noisy_data = self.gaussian_noise(data, self.snr)
+        if self.noise is not None:
+            if self.std is not None:
+                noisy_data = data + np.abs(np.random.normal(0, 0.5 ** 2, data.shape))
+            elif self.snr is not None:
+                noisy_data = self.gaussian_noise(data, self.snr)
+            else:
+                raise NotImplementedError("Only (mean, std) or snr can be given")
         else:
-            raise NotImplementedError("Only (mean, std) or snr can be given")
+            noisy_data = data
         return data, noisy_data
 
 
@@ -279,7 +288,8 @@ class CombineChannels(Transform):
         return np.concatenate((mix, sources[indexes_sorted[2:]]))
 
 
-def get_transforms(frames, scaler=None, add_axis=0, noise_dict_params=None, combine_channels_args=None):
+def get_transforms(frames, scaler=None, add_axis=0, add_teacher=False,
+                   noise_dict_params=None, combine_channels_args=None):
     transf = []
     unsqueeze_axis = None
     if add_axis is not None:
@@ -288,8 +298,8 @@ def get_transforms(frames, scaler=None, add_axis=0, noise_dict_params=None, comb
     if combine_channels_args is not None:
         transf.append(CombineChannels(*combine_channels_args))
 
-    if noise_dict_params is not None:
-        transf.append(AugmentGaussianNoise(**noise_dict_params))
+    if add_teacher:
+        transf.append(AddTeacherInput(noise_dict_params))
 
     transf.extend([ApplyLog(), PadOrTrunc(nb_frames=frames), ToTensor(unsqueeze_axis=unsqueeze_axis)])
     if scaler is not None:
