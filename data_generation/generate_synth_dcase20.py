@@ -37,6 +37,9 @@ def parse_args():
                         help=f"path to the json path with co-occurences, see {default_json_path} for an example of"
                         f"parameters defined (the structure has to be similar)")
     parser.add_argument('-n', '--number', type=int, default=1000, help="the number of data to be generated")
+    parser.add_argument('-sr', '--sample_rate', type=int, default=16000,
+                        help="The sample rate (in Hz) of the generated soundscapes "
+                             "(be careful the soundbank you're using is >= to this sample rate)")
     parser.add_argument('--out_tsv', type=str, default=None,
                         help="output metadata file, if not defined the folder will be taken from --out_folder and "
                              "audio replaced to metadata in the path")
@@ -44,8 +47,18 @@ def parse_args():
                         help="the number of parallel processes to be used if parallelizing")
     parser.add_argument('--random_seed', type=int, default=2020)
 
+    # For long soundscapes creation
+    parser.add_argument('-d', "--duration", type=float, default=10.,
+                        help="The clip duration of the generated soundscapes")
+    parser.add_argument('-m', "--max_events", type=int, default=None,
+                        help="The max number of co occuring events in a soundscapes.")
+
+    # No pitch shift option
+    parser.add_argument('-np', "--no_pitch_shift", action="store_true",
+                        help="This option allows to remove the pitch shift on the dataset compuation")
+
     args = parser.parse_args()
-    pformat(vars(args))
+    print(pformat(vars(args)))
     return args
 
 
@@ -59,7 +72,10 @@ if __name__ == '__main__':
     out_folder = args.out_folder
     soundbank_path = args.soundbank
     n_soundscapes = args.number
+    sample_rate = args.sample_rate
     random_state = args.random_seed
+    clip_duration = args.duration
+    max_events = args.max_events
 
     subset = "soundscapes"  # Needed for RIR, so used everywhere (need to be the same in reverberate_data.py)
     full_out_folder = osp.join(out_folder, subset)
@@ -73,10 +89,11 @@ if __name__ == '__main__':
     # Generate soundscapes
     # ############
     # Parameters (default)
-    clip_duration = cfg.clip_duration
-    sample_rate = cfg.sample_rate
     ref_db = cfg.ref_db
-    pitch_shift = cfg.pitch_shift
+    if args.no_pitch_shift:
+        pitch_shift = None
+    else:
+        pitch_shift = cfg.pitch_shift
 
     # Defined
     fg_folder = osp.join(soundbank_path, "foreground")
@@ -87,14 +104,14 @@ if __name__ == '__main__':
     # Check for multiprocessing
     nproc = args.nproc
     if nproc > 1:
-        if n_soundscapes // nproc < 200:
-            nproc = n_soundscapes // 200
+        if n_soundscapes // nproc < 100:
+            nproc = n_soundscapes // 100
             if nproc < 2:
                 nproc = 1
                 warnings.warn(f"Not enough files to generate (minimum 200 per processor, "
                               f"having {n_soundscapes // nproc}), using only one processor")
             else:
-                warnings.warn(f"Be careful, less than 200 files generated per jobs can have an impact "
+                warnings.warn(f"Be careful, less than 100 files generated per jobs can have an impact "
                               f"on the distribution of the classes, changing nproc to {nproc}")
 
     # Generate the data in single or multi processing
@@ -123,6 +140,7 @@ if __name__ == '__main__':
             sg.generate_by_label_occurence(label_occurences=co_occur_dict,
                                            number=number,
                                            out_folder=full_out_folder,
+                                           max_events=max_events,
                                            save_isolated_events=True,
                                            start_from=start_from,
                                            pitch_shift=pitch_shift)
@@ -144,6 +162,7 @@ if __name__ == '__main__':
         sg.generate_by_label_occurence(label_occurences=co_occur_dict,
                                        number=n_soundscapes,
                                        out_folder=full_out_folder,
+                                       max_events=max_events,
                                        save_isolated_events=True,
                                        pitch_shift=pitch_shift)
 

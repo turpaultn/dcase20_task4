@@ -71,6 +71,8 @@ if __name__ == '__main__':
                                                  "from --reverb_out_folder and audio replaced to metadata in the path",
                         type=str, default=None)
     parser.add_argument('--rir_subset', help="Choice between train, validation and eval", type=str, default="train")
+    parser.add_argument('--clip_duation', help="Duration of the clips to reverberate, just for checking purposes",
+                        type=float, default=10.)
 
     # Useful to reproduce a reverberated dataset
     parser.add_argument('--mix_info_file', help="if defined load the mix_info or create one if not exists and save it",
@@ -79,6 +81,9 @@ if __name__ == '__main__':
                         type=str, default="")
     parser.add_argument('--rir_list_file', help="if defined load the mix_info or create one if not exists and save it",
                         type=str, default="")
+    parser.add_argument('-sr', '--sample_rate', type=int, default=16000,
+                        help="The samplerate of the generated soundscapes "
+                             "(be careful the soundbank you're using is >= to this samplerate)")
     parser.add_argument('--nproc', type=int, default=4, help="The number of parallel processes to use")
     parser.add_argument('-rs', '--random_seed', help='Random seed', type=int, default=2020)
     args = parser.parse_args()
@@ -87,7 +92,7 @@ if __name__ == '__main__':
     # Parameters
     subset = "soundscapes"  # need to be the same in generate_synth_dcase20.py (last folder before sounds)
     nproc = args.nproc
-    sample_rate = cfg.sample_rate
+    sample_rate = args.sample_rate
     clip_duration = cfg.clip_duration
 
     rir_folder = args.rir_folder
