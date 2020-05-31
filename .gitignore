@@ -11,6 +11,8 @@ audio/ # all audio folders
 dataset/check_files/
 dataset/add_missing_files.py
 
+data_generation/randomize_names.py
+
 # Testing
 baseline/test/
 

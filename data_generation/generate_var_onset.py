@@ -10,7 +10,7 @@ import os.path as osp
 import pandas as pd
 from pprint import pformat
 
-from desed.generate_synthetic import SoundscapesGenerator
+from desed.generate_synthetic import SoundscapesGenerator, generate_files_from_jams
 from desed.utils import create_folder, modify_fg_onset, modify_jams
 from desed.post_process import rm_high_polyphony, post_process_txt_labels
 from desed.logger import create_logger
@@ -177,7 +177,8 @@ if __name__ == '__main__':
     out_folder_5500 = osp.join(base_out_folder, "5500ms")
     add_onset = 5.0
     modif_onset_5s = functools.partial(modify_fg_onset, slice_seconds=add_onset)
-    modify_jams(jams_to_modify, modif_onset_5s, out_folder_5500)
+    list_jams5500 = modify_jams(jams_to_modify, modif_onset_5s, out_folder_5500)
+    generate_files_from_jams(list_jams5500, out_folder_5500, out_folder_5500)
     # we also need to generate a new DataFrame with the right values
     df = pd.read_csv(out_tsv, sep="\t")
     df["onset"] += add_onset
@@ -189,7 +190,8 @@ if __name__ == '__main__':
     out_folder_9500 = osp.join(base_out_folder, "9500ms")
     add_onset = 9.0
     modif_onset_5s = functools.partial(modify_fg_onset, slice_seconds=add_onset)
-    modify_jams(jams_to_modify, modif_onset_5s, out_folder_9500)
+    list_jams9500 = modify_jams(jams_to_modify, modif_onset_5s, out_folder_9500)
+    generate_files_from_jams(list_jams9500, out_folder_9500, out_folder_9500)
     df = pd.read_csv(out_tsv, sep="\t")
     df["onset"] += add_onset
     df["offset"] = df["offset"].apply(lambda x: min(x, add_onset))
