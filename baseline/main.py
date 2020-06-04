@@ -164,7 +164,7 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
     return loss
 
 
-def get_dfs(desed_dataset, subsets, nb_files=None, separated_sources=False, no_ps=None):
+def get_dfs(desed_dataset, subsets, nb_files=None, separated_sources=False, no_ps=None, reverb=None):
     log = create_logger(__name__ + "/" + inspect.currentframe().f_code.co_name, terminal_level=cfg.terminal_level)
     audio_unlabel_ss = cfg.unlabel_ss if separated_sources else None
     audio_validation_ss = cfg.validation_ss if separated_sources else None
@@ -180,6 +180,7 @@ def get_dfs(desed_dataset, subsets, nb_files=None, separated_sources=False, no_p
     # Event if synthetic not used for training, used on validation purpose
     train_synth_pth = cfg.train_synth
     valid_synth_pth = cfg.valid_synth
+    assert reverb is None or no_ps is None, "Reverb and no pitch shifting not implemented together, choose one only"
     if no_ps is not None:
         if no_ps == "valid":
             valid_synth_pth = cfg.valid_synth_no_ps
@@ -188,6 +189,14 @@ def get_dfs(desed_dataset, subsets, nb_files=None, separated_sources=False, no_p
             valid_synth_pth = cfg.valid_synth_no_ps
         else:
             raise NotImplementedError("no_ps in get_dfs() can be only in {None, 'valid', 'all'}")
+    if reverb is not None:
+        if reverb == "valid":
+            valid_synth_pth = cfg.valid_synth_reverb
+        elif reverb == "all":
+            train_synth_pth = cfg.train_synth_reverb
+            valid_synth_pth = cfg.valid_synth_reverb
+        else:
+            raise NotImplementedError("reverb in get_dfs() can be only in {None, 'valid', 'all'}")
     train_synth_df = desed_dataset.initialize_and_get_df(train_synth_pth, audio_dir_ss=audio_synthetic_ss,
                                                          nb_files=nb_files)
     valid_synth_df = desed_dataset.initialize_and_get_df(valid_synth_pth, audio_dir_ss=audio_synthetic_ss,
@@ -300,10 +309,12 @@ if __name__ == '__main__':
     parser.add_argument("-snr", "--noise_snr", type=float, default=30)
     parser.add_argument("-s", '--subpart_data', type=int, default=None,
                         help="Number of files to be used. Useful when testing on small number of files.")
-    parser.add_argument("-r", "--rampup", type=str, default=None,
+    parser.add_argument("-r", "--rampup", type=str, default="all",
                         help="Rampup applied or not, possible values: {'lr', 'consistency', 'all'}")
     parser.add_argument("-np", "--no_ps", type=str, default=None,
                         help="If pitch shifting not wanted, values possible: ['valid', all']")
+    parser.add_argument("--reverb", type=str, default=None,
+                        help="If reverb wants to be applied, values possible: ['valid', all']")
     f_args = parser.parse_args()
     pprint(vars(f_args))
 
@@ -359,8 +370,8 @@ if __name__ == '__main__':
     # DATA
     # ##############
     dataset = DESED(base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
-                    compute_log=False)
-    dfs = get_dfs(dataset, subset_list, reduced_number_of_data, no_ps=f_args.no_ps)
+                    compute_log=False, use_multiprocessing=False)
+    dfs = get_dfs(dataset, subset_list, reduced_number_of_data, no_ps=f_args.no_ps, reverb=f_args.reverb)
 
     list_dataset, batch_sizes, strong_mask, weak_mask = set_train_dataset(subset_list, dfs, encod_func, batch_sizes)
 

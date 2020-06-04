@@ -1,16 +1,21 @@
 """Apply RIR on the generated data (comes from source separation folder from Google code)"""
 import argparse
 import glob
+import inspect
 import multiprocessing
+import os
+
 import numpy as np
 import os.path as osp
+import pandas as pd
 import logging
 import re
 import sys
 import time
 from pprint import pformat
+
 from desed.logger import create_logger
-from desed.post_process import post_process_txt_labels
+from desed.post_process import get_data, _post_process_labels_file, save_tsv
 from desed.utils import create_folder
 
 import config_data as cfg
@@ -51,6 +56,69 @@ def make_example_list(base_dir_soundscapes, base_dir_isolated_events=None, patte
         examples_list.append("\t".join(example_list))
 
     return examples_list
+
+
+# Need to be adapted because reverb added lines in the label file.
+def post_process_txt_labels(txtdir, wavdir=None, output_folder=None, output_tsv=None, min_dur_event=0.250,
+                            min_dur_inter=0.150, background_label=False, rm_nOn_nOff=True):
+    """ clean the .txt files of each file. It is the same processing as the real data
+    - overlapping events of the same class are mixed
+    - if silence < 150ms between two conscutive events of the same class, they are mixed
+    - if event < 250ms, the event lasts 250ms
+
+    Args:
+        txtdir: str, directory path where the XXX.txt files are.
+        wavdir: str, directory path where the associated XXX.wav audio files are (associated with .txt files)
+        output_folder: str, optional, folder in which to put the checked files
+        output_tsv: str, optional, tsv with all the annotations concatenated
+        min_dur_event: float, optional in sec, minimum duration of an event
+        min_dur_inter: float, optional in sec, minimum duration between 2 events
+        background_label: bool, whether to include the background label in the annotations.
+        rm_nOn_nOff: bool, whether to delete the additional _nOn _nOff at the end of labels.
+
+    Returns:
+        None
+    """
+    logger = create_logger(__name__ + "/" + inspect.currentframe().f_code.co_name)
+    if wavdir is None:
+        wavdir = txtdir
+    fix_count = 0
+    logger.info("Correcting annotations ... \n"
+                "* annotations with negative duration will be removed\n" +
+                "* annotations with duration <250ms will be extended on the offset side)")
+
+    if output_folder is not None:
+        create_folder(output_folder)
+
+    df_single = pd.DataFrame()  # only useful if output_csv defined
+
+    if background_label:
+        list_files = glob.glob(osp.join(txtdir, "*.jams"))
+    else:
+        list_files = glob.glob(osp.join(txtdir, "*.txt"))
+        if len(list_files) == 0:
+            list_files = glob.glob(osp.join(txtdir, '*.jams'))
+    out_extension = '.txt'
+    for fn in list_files:
+        logger.debug(fn)
+        df, length_sec = get_data(fn, osp.join(wavdir, osp.splitext(osp.basename(fn))[0] + '.wav'),
+                                  background_label=background_label)
+        df = df.dropna()  # trick: will remove the 'rir' lines because they do not have \t
+        df, fc = _post_process_labels_file(df, length_sec, min_dur_event, min_dur_inter, rm_nOn_nOff)
+        fix_count += fc
+
+        if output_folder is not None:
+            filepath = os.path.splitext(os.path.basename(fn))[0] + out_extension
+            df[['onset', 'offset', 'event_label']].to_csv(osp.join(output_folder, filepath),
+                                                          header=False, index=False, sep="\t")
+        if output_tsv is not None:
+            df['filename'] = osp.join(osp.splitext(osp.basename(fn))[0] + '.wav')
+            df_single = df_single.append(df[['filename', 'onset', 'offset', 'event_label']], ignore_index=True)
+
+    if output_tsv:
+        save_tsv(df_single, output_tsv)
+
+    logger.info(f"{fix_count} problems Fixed")
 
 
 if __name__ == '__main__':

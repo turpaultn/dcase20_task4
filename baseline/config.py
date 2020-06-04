@@ -9,8 +9,11 @@ weak = os.path.join(workspace, 'dataset/metadata/train/weak.tsv')
 unlabel = os.path.join(workspace, 'dataset/metadata/train/unlabel_in_domain.tsv')
 train_synth = os.path.join(workspace, 'dataset/metadata/train/synthetic20_train/soundscapes.tsv')
 valid_synth = os.path.join(workspace, 'dataset/metadata/validation/synthetic20_validation/soundscapes.tsv')
-train_synth_no_ps = os.path.join(workspace, 'dataset/metadata/validation/synthetic20_train_no_ps/soundscapes.tsv')
+train_synth_no_ps = os.path.join(workspace, 'dataset/metadata/train/synthetic20_train_no_ps/soundscapes.tsv')
 valid_synth_no_ps = os.path.join(workspace, 'dataset/metadata/validation/synthetic20_validation_no_ps/soundscapes.tsv')
+train_synth_reverb = os.path.join(workspace, 'dataset/metadata/train/synthetic20_train_reverb/soundscapes.tsv')
+valid_synth_reverb = os.path.join(workspace, 'dataset/metadata/validation/synthetic20_validation_reverb/soundscapes.tsv')
+
 validation = os.path.join(workspace, 'dataset/metadata/validation/validation.tsv')
 test2018 = os.path.join(workspace, 'dataset/metadata/validation/test_dcase2018.tsv')
 eval2018 = os.path.join(workspace, 'dataset/metadata/validation/eval_dcase2018.tsv')
@@ -43,7 +46,7 @@ max_consistency_cost = 2
 # Training
 in_memory = True
 in_memory_unlab = False
-num_workers = 12
+num_workers = 4
 batch_size = 24
 
 n_epoch = 200
