@@ -42,7 +42,7 @@ max_consistency_cost = 2
 # Training
 in_memory = True
 in_memory_unlab = False
-num_workers = 12
+num_workers = 8
 batch_size = 24
 noise_snr = 30
 

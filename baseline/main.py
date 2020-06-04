@@ -297,8 +297,8 @@ if __name__ == '__main__':
 
     concat_dataset = ConcatDataset(list_dataset)
     sampler = MultiStreamBatchSampler(concat_dataset, batch_sizes=batch_sizes)
-    training_loader = DataLoader(concat_dataset, batch_sampler=sampler)
-    valid_synth_loader = DataLoader(valid_synth_data, batch_size=cfg.batch_size)
+    training_loader = DataLoader(concat_dataset, batch_sampler=sampler, num_workers=cfg.num_workers)
+    valid_synth_loader = DataLoader(valid_synth_data, batch_size=cfg.batch_size, num_workers=cfg.num_workers)
 
     # ##############
     # Model
@@ -409,7 +409,8 @@ if __name__ == '__main__':
     predicitons_fname = os.path.join(saved_pred_dir, "baseline_validation.tsv")
 
     validation_data = DataLoadDf(dfs["validation"], encod_func, transform=transforms_valid, return_indexes=True)
-    validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
+    validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False,
+                                       num_workers=cfg.num_workers)
     validation_labels_df = dfs["validation"].drop("feature_filename", axis=1)
     durations_validation = get_durations_df(cfg.validation, cfg.audio_validation_dir)
     # Preds with only one value
