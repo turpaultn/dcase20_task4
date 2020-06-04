@@ -341,10 +341,12 @@ class DESED:
             n_jobs = multiprocessing.cpu_count() - 1
             logger.info(f"Using {n_jobs} cpus")
             with closing(multiprocessing.Pool(n_jobs)) as p:
-                for filename, out_path in tqdm(p.imap_unordered(extract_file_func, uniq_fpaths, 200), total=len(uniq_fpaths)):
-                    row_features = df_meta[df_meta.filename == filename].copy()
-                    row_features.loc[:, "feature_filename"] = out_path
-                    df_features = df_features.append(row_features, ignore_index=True)
+                for filename, out_path in tqdm(p.imap_unordered(extract_file_func, uniq_fpaths, 200),
+                                               total=len(uniq_fpaths)):
+                    if out_path is not None:
+                        row_features = df_meta[df_meta.filename == filename].copy()
+                        row_features.loc[:, "feature_filename"] = out_path
+                        df_features = df_features.append(row_features, ignore_index=True)
         else:
             for uniq_fpath in tqdm(uniq_fpaths):
                 filename, out_path = extract_file_func(uniq_fpath)

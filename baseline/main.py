@@ -399,16 +399,16 @@ if __name__ == '__main__':
         dset.set_transform(transforms)
     concat_dataset = ConcatDataset(list_dataset)
     sampler = MultiStreamBatchSampler(concat_dataset, batch_sizes=batch_sizes)
-    training_loader = DataLoader(concat_dataset, batch_sampler=sampler)
+    training_loader = DataLoader(concat_dataset, batch_sampler=sampler, num_workers=cfg.num_workers)
 
     transforms_valid = get_transforms(cfg.max_frames, scaler, add_axis_conv)
     valid_synth_data = DataLoadDf(dfs["valid_synthetic"], encod_func, transforms_valid,
                                   return_indexes=True, in_memory=cfg.in_memory)
-    valid_synth_loader = DataLoader(valid_synth_data, batch_size=cfg.batch_size)
+    valid_synth_loader = DataLoader(valid_synth_data, batch_size=cfg.batch_size, num_workers=cfg.num_workers)
 
     valid_weak_data = DataLoadDf(dfs["valid_weak"], encod_func, transforms_valid,
                                  return_indexes=True, in_memory=cfg.in_memory)
-    valid_weak_loader = DataLoader(valid_weak_data, batch_size=cfg.batch_size)
+    valid_weak_loader = DataLoader(valid_weak_data, batch_size=cfg.batch_size, num_workers=cfg.num_workers)
 
     # ##############
     # Model
@@ -526,7 +526,8 @@ if __name__ == '__main__':
     predicitons_fname = os.path.join(saved_pred_dir, "baseline_validation.tsv")
 
     validation_data = DataLoadDf(dfs["validation"], encod_func, transform=transforms_valid, return_indexes=True)
-    validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False)
+    validation_dataloader = DataLoader(validation_data, batch_size=cfg.batch_size, shuffle=False, drop_last=False,
+                                       num_workers=cfg.num_workers)
     validation_labels_df = dfs["validation"].drop("feature_filename", axis=1)
     durations_validation = get_durations_df(cfg.validation)
     # Preds with only one value

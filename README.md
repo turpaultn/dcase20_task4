@@ -25,6 +25,16 @@ for Linux based system:
 1. [install Ananconda][anaconda_download]
 2. launch `conda_create_environment.sh` (recommended line by line)
 
+
+## Submission
+
+Please check the [submission_page].
+
+The evaluation data is on this [eval_zenodo_repo].
+
+Before doing your submission, please check your submission folder for task 4 with the dedicated scripts:
+- `python validate_submissions.py -i <path to task 4 submission folder>`
+
 ## Baseline
 
 This year, a **sound separation** model is used: see [sound-separation] folder which is the [fuss_repo] integrated as a 
@@ -263,6 +273,7 @@ In Proceedings of the 21st ACM international conference on Multimedia, 411–412
 [desed]: https://github.com/turpaultn/DESED
 [desed_website]: https://project.inria.fr/desed/dcase-challenge/dcase-2020-task-4/
 [evaluation_dataset]: https://doi.org/10.5281/zenodo.3571049
+[eval_zenodo_repo]: https://doi.org/10.5281/zenodo.3866363
 [FSD]: https://datasets.freesound.org/fsd/
 [fuss]: https://doi.org/10.5281/zenodo.3694383
 [fuss_repo]: https://github.com/google-research/sound-separation
@@ -273,6 +284,7 @@ In Proceedings of the 21st ACM international conference on Multimedia, 411–412
 [paper-psds]: https://arxiv.org/pdf/1910.08440.pdf
 [Scaper]: https://github.com/justinsalamon/scaper
 [synthetic_dataset]: https://doi.org/10.5281/zenodo.3550598
+[submission_page]: http://dcase.community/challenge2020/submission
 [website]: http://dcase.community/challenge2020/
 
 [sed_roc_0_0_100]: figures/sed_baseline/psds_roc_0_0_100.png
