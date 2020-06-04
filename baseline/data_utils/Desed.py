@@ -76,7 +76,8 @@ class DESED:
         feature_dir : str, directory to store the features
 
     """
-    def __init__(self, base_feature_dir="features", recompute_features=False, compute_log=True):
+    def __init__(self, base_feature_dir="features", recompute_features=False, compute_log=True,
+                 use_multiprocessing=True):
         # Parameters, they're kept if we need to reproduce the dataset
         self.sample_rate = cfg.sample_rate
         self.n_window = cfg.n_window
@@ -87,6 +88,7 @@ class DESED:
         # Defined parameters
         self.recompute_features = recompute_features
         self.compute_log = compute_log
+        self.use_multiproc = use_multiprocessing
 
         # Feature dir to not have the same name with different parameters
         ext_freq = ''
@@ -335,11 +337,17 @@ class DESED:
                                               pattern_ss=pattern_ss,
                                               ext_ss_feature_file=ext_ss_feature_file,
                                               keep_sources=keep_sources)
-
-        n_jobs = multiprocessing.cpu_count() - 1
-        logger.info(f"Using {n_jobs} cpus")
-        with closing(multiprocessing.Pool(n_jobs)) as p:
-            for filename, out_path in tqdm(p.imap_unordered(extract_file_func, uniq_fpaths, 200), total=len(uniq_fpaths)):
+        if self.use_multiproc:
+            n_jobs = multiprocessing.cpu_count() - 1
+            logger.info(f"Using {n_jobs} cpus")
+            with closing(multiprocessing.Pool(n_jobs)) as p:
+                for filename, out_path in tqdm(p.imap_unordered(extract_file_func, uniq_fpaths, 200), total=len(uniq_fpaths)):
+                    row_features = df_meta[df_meta.filename == filename].copy()
+                    row_features.loc[:, "feature_filename"] = out_path
+                    df_features = df_features.append(row_features, ignore_index=True)
+        else:
+            for uniq_fpath in tqdm(uniq_fpaths):
+                filename, out_path = extract_file_func(uniq_fpath)
                 row_features = df_meta[df_meta.filename == filename].copy()
                 row_features.loc[:, "feature_filename"] = out_path
                 df_features = df_features.append(row_features, ignore_index=True)
