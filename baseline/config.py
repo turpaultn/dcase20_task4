@@ -13,6 +13,8 @@ train_synth_no_ps = os.path.join(workspace, 'dataset/metadata/train/synthetic20_
 valid_synth_no_ps = os.path.join(workspace, 'dataset/metadata/validation/synthetic20_validation_no_ps/soundscapes.tsv')
 train_synth_reverb = os.path.join(workspace, 'dataset/metadata/train/synthetic20_train_reverb/soundscapes.tsv')
 valid_synth_reverb = os.path.join(workspace, 'dataset/metadata/validation/synthetic20_validation_reverb/soundscapes.tsv')
+valid_synth_no_ps_reverb = os.path.join(workspace, 'dataset/metadata/validation/synthetic20_validation_no_ps_reverb/'
+                                                   'soundscapes.tsv')
 
 validation = os.path.join(workspace, 'dataset/metadata/validation/validation.tsv')
 test2018 = os.path.join(workspace, 'dataset/metadata/validation/test_dcase2018.tsv')

@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
+import functools
+import multiprocessing
 import os
+from contextlib import closing
 from os import path as osp
 
 import psds_eval
@@ -412,6 +415,29 @@ def compute_psds_from_operating_points(list_predictions, groundtruth_df, meta_df
     return psds
 
 
+def get_f1_sed_score(predictions, gtruth_df, verbose=False):
+    events_metric = compute_sed_eval_metrics(predictions, gtruth_df, verbose=verbose)
+    macro_f1_event = events_metric.results_class_wise_average_metrics()['f_measure']['f_measure']
+    return macro_f1_event
+
+
+def get_f1_psds(predictions, gtruth_df, meta_df, verbose=False):
+    dtc_threshold, gtc_threshold, cttc_threshold = 0.5, 0.5, 0.3
+    psds = PSDSEval(dtc_threshold, gtc_threshold, cttc_threshold, ground_truth=gtruth_df, metadata=meta_df)
+    psds_macro_f1, psds_f1_classes = psds.compute_macro_f_score(predictions)
+    if verbose:
+        logger.info(f"F1_score (psds_eval) accounting cross triggers: {psds_macro_f1}")
+    return  psds_macro_f1
+
+
+def get_psds_ct(predictions, gtruth_df, meta_df, verbose=False):
+    psds = compute_psds_from_operating_points(predictions, gtruth_df, meta_df)
+    psds_ct_score = psds.psds(alpha_ct=1, alpha_st=0, max_efpr=100).value
+    if verbose:
+        logger.info(f"PSDS (1, 0, 100) accounting cross triggers: {psds_ct_score}")
+    return psds_ct_score
+
+
 def compute_metrics(predictions, gtruth_df, meta_df, verbose=True):
     events_metric = compute_sed_eval_metrics(predictions, gtruth_df, verbose=verbose)
     macro_f1_event = events_metric.results_class_wise_average_metrics()['f_measure']['f_measure']
@@ -421,3 +447,45 @@ def compute_metrics(predictions, gtruth_df, meta_df, verbose=True):
     if verbose:
         logger.info(f"F1_score (psds_eval) accounting cross triggers: {psds_macro_f1}")
     return macro_f1_event, psds_macro_f1
+
+
+# Bootstrap in multiprocessing
+class NoDaemonProcess(multiprocessing.Process):
+    # make 'daemon' attribute always return False
+    def _get_daemon(self):
+        return False
+
+    def _set_daemon(self, value):
+        pass
+    daemon = property(_get_daemon, _set_daemon)
+
+
+class MyPool(multiprocessing.pool.Pool):
+    # We sub-class multiprocessing.pool.Pool instead of multiprocessing.Pool
+    # because the latter is only a wrapper function, not a proper class.
+    Process = NoDaemonProcess
+
+
+def bootstrap_iter(pred, gtruth, metric, frac, _, **kwargs):
+    names_kept = gtruth.filename.drop_duplicates().sample(frac=frac)
+    if isinstance(pred, list):
+        pred_bt = []
+        for pdf in pred:
+            pred_bt.append(pdf[pdf.filename.isin(names_kept)])
+    else:
+        pred_bt = pred[pred.filename.isin(names_kept)]
+    gt_bt = gtruth[gtruth.filename.isin(names_kept)]
+    m = metric(pred_bt, gt_bt, **kwargs)
+    return m
+
+
+def bootstrap(pred, gtruth, metric, n_iterations=200, frac=0.8, confidence=0.9, **kwargs):
+    bt_iter = functools.partial(bootstrap_iter, pred, gtruth, metric, frac, **kwargs)
+    with closing(MyPool(multiprocessing.cpu_count() - 1)) as pool:
+        result_metrics = pool.map(bt_iter, range(n_iterations))
+    result_metrics.sort()
+    mean_val = np.mean(result_metrics)
+    lower = np.percentile(result_metrics, ((1 - confidence) / 2) * 100)
+    upper = np.percentile(result_metrics, (confidence + ((1 - confidence) / 2)) * 100)
+    return mean_val, lower, upper
+

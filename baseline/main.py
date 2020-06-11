@@ -17,7 +17,7 @@ from data_utils.Desed import DESED
 from data_utils.DataLoad import DataLoadDf, ConcatDataset, MultiStreamBatchSampler
 from TestModel import _load_crnn
 from evaluation_measures import get_predictions, psds_score, compute_psds_from_operating_points, compute_metrics, \
-    audio_tagging_results, get_f_measure_by_class
+    audio_tagging_results, get_f_measure_by_class, get_f1_sed_score, bootstrap, get_psds_ct, get_f1_psds
 from models.CRNN import CRNN
 import config as cfg
 from utilities import ramps
@@ -180,23 +180,24 @@ def get_dfs(desed_dataset, subsets, nb_files=None, separated_sources=False, no_p
     # Event if synthetic not used for training, used on validation purpose
     train_synth_pth = cfg.train_synth
     valid_synth_pth = cfg.valid_synth
-    assert reverb is None or no_ps is None, "Reverb and no pitch shifting not implemented together, choose one only"
     if no_ps is not None:
-        if no_ps == "valid":
-            valid_synth_pth = cfg.valid_synth_no_ps
-        elif no_ps == "all":
-            train_synth_pth = cfg.train_synth_no_ps
-            valid_synth_pth = cfg.valid_synth_no_ps
+        if no_ps in ["valid", "all"]:
+            if reverb == "valid":
+                valid_synth_pth = cfg.valid_synth_no_ps_reverb
+            else:
+                valid_synth_pth = cfg.valid_synth_no_ps
+            if no_ps == "all":
+                train_synth_pth = cfg.train_synth_no_ps
         else:
             raise NotImplementedError("no_ps in get_dfs() can be only in {None, 'valid', 'all'}")
-    if reverb is not None:
-        if reverb == "valid":
+    elif reverb is not None:
+        if reverb in ["valid", "all"]:
             valid_synth_pth = cfg.valid_synth_reverb
-        elif reverb == "all":
-            train_synth_pth = cfg.train_synth_reverb
-            valid_synth_pth = cfg.valid_synth_reverb
+            if reverb == "all":
+                train_synth_pth = cfg.train_synth_reverb
         else:
             raise NotImplementedError("reverb in get_dfs() can be only in {None, 'valid', 'all'}")
+
     train_synth_df = desed_dataset.initialize_and_get_df(train_synth_pth, audio_dir_ss=audio_synthetic_ss,
                                                          nb_files=nb_files)
     valid_synth_df = desed_dataset.initialize_and_get_df(valid_synth_pth, audio_dir_ss=audio_synthetic_ss,
@@ -306,7 +307,7 @@ if __name__ == '__main__':
     parser.add_argument("-bs", "--batch_sizes", type=int, nargs='+', default=None,
                         help="The number of each subset per batch. "
                              "Number of batch_sizes should be equal to the number of subsets.")
-    parser.add_argument("-snr", "--noise_snr", type=float, default=30)
+    parser.add_argument("-snr", "--noise_snr", type=float, default=None)
     parser.add_argument("-s", '--subpart_data', type=int, default=None,
                         help="Number of files to be used. Useful when testing on small number of files.")
     parser.add_argument("-r", "--rampup", type=str, default="all",
@@ -460,7 +461,7 @@ if __name__ == '__main__':
     # Train
     # ##############
     results = pd.DataFrame(columns=["loss", "valid_synth_f1", "weak_metric", "global_valid"])
-    for epoch in range(cfg.n_epoch):
+    for epoch in range(2):#cfg.n_epoch):
         crnn.train()
         crnn_ema.train()
         crnn, crnn_ema = to_cuda_if_available(crnn, crnn_ema)
@@ -476,7 +477,11 @@ if __name__ == '__main__':
                                       median_window=median_window, save_predictions=None)
         # Validation with synthetic data (dropping feature_filename for psds)
         valid_synth = dfs["valid_synthetic"].drop("feature_filename", axis=1)
-        valid_synth_f1, psds_m_f1 = compute_metrics(predictions, valid_synth, durations_valid_synth)
+        valid_synth_f1, lvf1, hvf1 = bootstrap(predictions, valid_synth, get_f1_sed_score)
+        psds_f1_valid, lvps, hvps = bootstrap(predictions, valid_synth, get_f1_psds, meta_df=durations_valid_synth)
+
+        logger.info(f"F1 event_based: {valid_synth_f1}, +- {max(valid_synth_f1-lvf1, hvf1 - valid_synth_f1)},\n"
+                    f"Psds ct: {psds_f1_valid}, +- {max(psds_f1_valid - lvps, hvps - psds_f1_valid)}")
 
         valid_weak_f1_pc = get_f_measure_by_class(crnn, len(many_hot_encoder.labels), valid_weak_loader)
         valid_weak_f1 = np.mean(valid_weak_f1_pc)
@@ -487,7 +492,7 @@ if __name__ == '__main__':
         state['optimizer']['state_dict'] = optim.state_dict()
         state['epoch'] = epoch
         state['valid_metric'] = valid_synth_f1
-        state['valid_f1_psds'] = psds_m_f1
+        state['psds_f1_valid'] = psds_f1_valid
         state['valid_weak_f1'] = valid_weak_f1
 
         global_valid = valid_weak_f1 + valid_synth_f1
@@ -534,7 +539,9 @@ if __name__ == '__main__':
     valid_predictions = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
                                         pooling_time_ratio, median_window=median_window,
                                         save_predictions=predicitons_fname)
-    compute_metrics(valid_predictions, validation_labels_df, durations_validation)
+    get_f1_sed_score(valid_predictions, validation_labels_df, verbose=True)
+    f1, low_f1, high_f1 = bootstrap(valid_predictions, validation_labels_df, get_f1_sed_score)
+    logger.info(f"F1 event_based: {f1}, +- {max(f1 - low_f1, high_f1 - f1)}")
 
     # ##########
     # Optional but recommended
@@ -543,8 +550,27 @@ if __name__ == '__main__':
     n_thresholds = 50
     # Example of 5 thresholds: 0.1, 0.3, 0.5, 0.7, 0.9
     list_thresholds = np.arange(1 / (n_thresholds * 2), 1, 1 / n_thresholds)
-    pred_ss_thresh = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
-                                     pooling_time_ratio, thresholds=list_thresholds, median_window=median_window,
-                                     save_predictions=predicitons_fname)
-    psds = compute_psds_from_operating_points(pred_ss_thresh, validation_labels_df, durations_validation)
-    psds_score(psds, filename_roc_curves=os.path.join(saved_pred_dir, "figures/psds_roc.png"))
+    pred_thresh = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
+                                  pooling_time_ratio, thresholds=list_thresholds, median_window=median_window,
+                                  save_predictions=predicitons_fname)
+    get_psds_ct(pred_thresh, validation_labels_df, durations_validation, verbose=True)
+    psds_ct, low_p, high_p = bootstrap(pred_thresh, validation_labels_df, get_psds_ct,
+                                       meta_df=durations_validation)
+    logger.info(f"Psds ct: {psds_ct}, +- {max(psds_ct - low_p, high_p - psds_ct)}")
+    df_res = pd.DataFrame([[f"{f1*100:.1f}~$\pm$~{max(f1 - low_f1, high_f1 - f1)*100:.1f}",
+                            f"{psds_ct:.3f}~$\pm$~{max(psds_ct - low_p, high_p - psds_ct):.3f}"]],
+                          columns=["f1", "psds_ct"])
+    logger.info(df_res)
+    df_res.to_csv(os.path.join("stored_data", "results.tsv"), index=False, sep="\t")
+    # # ##########
+    # # Optional but recommended
+    # # ##########
+    # # Compute psds scores with multiple thresholds (more accurate). n_thresholds could be increased.
+    # n_thresholds = 50
+    # # Example of 5 thresholds: 0.1, 0.3, 0.5, 0.7, 0.9
+    # list_thresholds = np.arange(1 / (n_thresholds * 2), 1, 1 / n_thresholds)
+    # pred_thresh = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
+    #                               pooling_time_ratio, thresholds=list_thresholds, median_window=median_window,
+    #                               save_predictions=predicitons_fname)
+    # psds = compute_psds_from_operating_points(pred_thresh, validation_labels_df, durations_validation)
+    # psds_score(psds, filename_roc_curves=os.path.join(saved_pred_dir, "figures/psds_roc.png"))

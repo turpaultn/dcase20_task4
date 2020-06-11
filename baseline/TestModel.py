@@ -13,7 +13,8 @@ import pandas as pd
 from data_utils.DataLoad import DataLoadDf
 from data_utils.Desed import DESED
 from evaluation_measures import psds_score, get_predictions, \
-    compute_psds_from_operating_points, compute_metrics, compute_sed_eval_metrics
+    compute_psds_from_operating_points, compute_metrics, compute_sed_eval_metrics, get_f1_sed_score, bootstrap, \
+    get_psds_ct
 from utilities.utils import to_cuda_if_available, generate_tsv_wav_durations, meta_path_to_audio_dir
 from utilities.ManyHotEncoder import ManyHotEncoder
 from utilities.Transforms import get_transforms
@@ -102,46 +103,6 @@ def get_variables(args):
     return model_pth, median_win, gt_audio_pth, groundtruth, meta_dur_df
 
 
-class NoDaemonProcess(multiprocessing.Process):
-    # make 'daemon' attribute always return False
-    def _get_daemon(self):
-        return False
-
-    def _set_daemon(self, value):
-        pass
-    daemon = property(_get_daemon, _set_daemon)
-
-
-class MyPool(multiprocessing.pool.Pool):
-    # We sub-class multiprocessing.pool.Pool instead of multiprocessing.Pool
-    # because the latter is only a wrapper function, not a proper class.
-    Process = NoDaemonProcess
-
-
-def bootstrap_iter(pred, gtruth, metric, frac, _, **kwargs):
-    names_kept = gtruth.filename.drop_duplicates().sample(frac=frac)
-    if isinstance(pred, list):
-        pred_bt = []
-        for pdf in pred:
-            pred_bt.append(pdf[pdf.filename.isin(names_kept)])
-    else:
-        pred_bt = pred[pred.filename.isin(names_kept)]
-    gt_bt = gtruth[gtruth.filename.isin(names_kept)]
-    m = metric(pred_bt, gt_bt, **kwargs)
-    return m
-
-
-def bootstrap(pred, gtruth, metric, n_iterations=200, frac=0.8, confidence=0.9, **kwargs):
-    bt_iter = functools.partial(bootstrap_iter, pred, gtruth, metric, frac, **kwargs)
-    with closing(MyPool(multiprocessing.cpu_count() - 1)) as pool:
-        result_metrics = pool.map(bt_iter, range(n_iterations))
-    result_metrics.sort()
-    mean_val = np.mean(result_metrics)
-    lower = np.percentile(result_metrics, ((1 - confidence) / 2) * 100)
-    upper = np.percentile(result_metrics, (confidence + ((1 - confidence) / 2)) * 100)
-    return mean_val, lower, upper
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("-m", '--model_path', type=str, required=True,
@@ -185,14 +146,9 @@ if __name__ == '__main__':
                                          median_window=params["median_window"],
                                          save_predictions=f_args.save_predictions_path)
 
-    def macro_f1_func(predictions, gtruth_df, verbose=False):
-        events_metric = compute_sed_eval_metrics(predictions, gtruth_df, verbose=verbose)
-        macro_f1_event = events_metric.results_class_wise_average_metrics()['f_measure']['f_measure']
-        return macro_f1_event
-    
-    mean_f1, lf1, uf1 = bootstrap(single_predictions, groundtruth, macro_f1_func,
-                                  n_iterations=f_args.bootstrap_iterations)
-    logger.info(f"f1 score: {mean_f1} -{lf1} +{uf1}")
+    mean_f1, lf1, uf1 = bootstrap(single_predictions, groundtruth, get_f1_sed_score,
+                                  n_iterations=f_args.bootstrap_iterations, verbose=False)
+    logger.info(f"f1 score: {mean_f1} +- {max(mean_f1 - lf1, uf1 - mean_f1)}")
     # f1_macro = compute_metrics(single_predictions, groundtruth, durations)
 
     # ##########
@@ -212,10 +168,12 @@ if __name__ == '__main__':
     #     fname_roc = osp.splitext(f_args.save_predictions_path)[0] + "_roc.png"
     # psds_ct = psds_score(psds, filename_roc_curves=fname_roc)
 
-    def get_psds_score(pred_thresh, groundtruth, durations, verbose=False):
-        psds = compute_psds_from_operating_points(pred_thresh, groundtruth, durations)
-        psds_ct = psds_score(psds, verbose=verbose).value
-        return psds_ct
-    mean_psds, lpsds, upsds = bootstrap(pred_thresh, groundtruth, get_psds_score, durations=durations,
+    mean_psds, lpsds, upsds = bootstrap(pred_thresh, groundtruth, get_psds_ct, meta_df=durations,
                                         n_iterations=f_args.bootstrap_iterations)
-    logger.info(f"f1 score: {mean_psds} -{lpsds} +{upsds}")
+    logger.info(f"psds score: {mean_psds} +- {max(mean_psds - lpsds, upsds - mean_psds)}")
+
+    df_res = pd.DataFrame([[f"{mean_f1 * 100:.1f}~$\pm$~{max(mean_f1 - lf1, uf1 - mean_f1) * 100:.1f}",
+                            f"{mean_psds:.3f}~$\pm$~{max(mean_psds - lpsds, upsds - mean_psds):.3f}"]],
+                          columns=["f1", "psds_ct"])
+    logger.info(df_res)
+    df_res.to_csv(osp.join("stored_data", "results_test.tsv"), index=False, sep="\t")
