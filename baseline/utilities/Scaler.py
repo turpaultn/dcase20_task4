@@ -51,6 +51,7 @@ class Scaler:
                 batch_x, _ = sample
             else:
                 batch_x = sample
+            batch_x = batch_x[0]  # Takes the first channel (or there is one channel, or take the first of the sources)
             if type(batch_x) is torch.Tensor:
                 batch_x_arr = batch_x.numpy()
             else:

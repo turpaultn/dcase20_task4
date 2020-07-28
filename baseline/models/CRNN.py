@@ -27,8 +27,8 @@ class CRNN(nn.Module):
         if rnn_type == 'BGRU':
             nb_in = self.cnn.nb_filters[-1]
             if self.cnn_integration:
-                # self.fc = nn.Linear(nb_in * n_in_channel, nb_in)
-                nb_in = nb_in * n_in_channel
+                self.fc = nn.Linear(nb_in * n_in_channel, nb_in)
+                # nb_in = nb_in * n_in_channel
             self.rnn = BidirectionalGRU(nb_in,
                                         n_RNN_cell, dropout=dropout_recurrent, num_layers=n_layers_RNN)
         else:
@@ -38,7 +38,7 @@ class CRNN(nn.Module):
         self.sigmoid = nn.Sigmoid()
         if self.attention:
             self.dense_softmax = nn.Linear(n_RNN_cell*2, nclass)
-            self.softmax = nn.Softmax(dim=-2)
+            self.softmax = nn.Softmax(dim=-1)
 
     def load_cnn(self, state_dict):
         self.cnn.load_state_dict(state_dict)
@@ -48,6 +48,8 @@ class CRNN(nn.Module):
 
     def load_state_dict(self, state_dict, strict=True):
         self.cnn.load_state_dict(state_dict["cnn"])
+        if self.cnn_integration:
+            self.fc.load_state_dict(state_dict["fc"])
         self.rnn.load_state_dict(state_dict["rnn"])
         self.dense.load_state_dict(state_dict["dense"])
 
@@ -55,10 +57,15 @@ class CRNN(nn.Module):
         state_dict = {"cnn": self.cnn.state_dict(destination=destination, prefix=prefix, keep_vars=keep_vars),
                       "rnn": self.rnn.state_dict(destination=destination, prefix=prefix, keep_vars=keep_vars),
                       'dense': self.dense.state_dict(destination=destination, prefix=prefix, keep_vars=keep_vars)}
+        if self.cnn_integration:
+            state_dict["fc"] = self.fc.state_dict(destination=destination, prefix=prefix, keep_vars=keep_vars)
         return state_dict
 
     def save(self, filename):
-        parameters = {'cnn': self.cnn.state_dict(), 'rnn': self.rnn.state_dict(), 'dense': self.dense.state_dict()}
+        parameters = {'cnn': self.cnn.state_dict(),
+                      'rnn': self.rnn.state_dict(), 'dense': self.dense.state_dict()}
+        if self.cnn_integration:
+            parameters['fc'] = self.fc.state_dict()
         torch.save(parameters, filename)
 
     def forward(self, x):
@@ -71,7 +78,7 @@ class CRNN(nn.Module):
         x = self.cnn(x)
         bs, chan, frames, freq = x.size()
         if self.cnn_integration:
-            x = x.reshape(bs_in, chan * nc_in, frames, freq)
+            x = x.view(bs_in, chan * nc_in, frames, freq)
 
         if freq != 1:
             warnings.warn(f"Output shape is: {(bs, frames, chan * freq)}, from {freq} staying freq")
@@ -80,6 +87,8 @@ class CRNN(nn.Module):
         else:
             x = x.squeeze(-1)
             x = x.permute(0, 2, 1)  # [bs, frames, chan]
+        if self.cnn_integration:
+            x = self.fc(x)
 
         # rnn features
         x = self.rnn(x)

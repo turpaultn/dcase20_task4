@@ -33,3 +33,4 @@ separated_sources.tsv
 runme_explor.sh
 baseline/res.txt
 baseline/logs
+rm_job.sh

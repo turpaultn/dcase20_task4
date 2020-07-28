@@ -122,6 +122,8 @@ if __name__ == '__main__':
                         help="Path of the groundtruth filename, (see in config, at dataset folder)")
     parser.add_argument("-s", '--save_predictions_path', type=str, default=None,
                         help="Path for the predictions to be saved (if needed)")
+    parser.add_argument("-res", '--store_results', type=str, default=osp.join("stored_data", "test_results"),
+                        help="Path for the results to be saved")
 
     parser.add_argument("-b", '--bootstrap_iterations', type=int, default=200,
                         help="Number of bootstrap samples to take (default 200, 80% taken each iteration).")
@@ -149,12 +151,15 @@ if __name__ == '__main__':
     mean_f1, lf1, uf1 = bootstrap(single_predictions, groundtruth, get_f1_sed_score,
                                   n_iterations=f_args.bootstrap_iterations, verbose=False)
     logger.info(f"f1 score: {mean_f1} +- {max(mean_f1 - lf1, uf1 - mean_f1)}")
+
+
     # f1_macro = compute_metrics(single_predictions, groundtruth, durations)
 
     # ##########
     # Optional but recommended
     # ##########
     # Compute psds scores with multiple thresholds (more accurate). n_thresholds could be increased.
+
     n_thresholds = 50
     # Example of 5 thresholds: 0.1, 0.3, 0.5, 0.7, 0.9
     list_thresholds = np.arange(1 / (n_thresholds * 2), 1, 1 / n_thresholds)
@@ -176,4 +181,4 @@ if __name__ == '__main__':
                             f"{mean_psds:.3f}~$\pm$~{max(mean_psds - lpsds, upsds - mean_psds):.3f}"]],
                           columns=["f1", "psds_ct"])
     logger.info(df_res)
-    df_res.to_csv(osp.join("stored_data", "results_test.tsv"), index=False, sep="\t")
+    df_res.to_csv(f_args.store_results, index=False, sep="\t")

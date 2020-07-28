@@ -12,7 +12,8 @@ import numpy as np
 from data_utils.DataLoad import DataLoadDf
 from data_utils.Desed import DESED
 from TestModel import _load_scaler, _load_crnn
-from evaluation_measures import psds_score, compute_psds_from_operating_points, compute_metrics
+from evaluation_measures import psds_score, compute_psds_from_operating_points, compute_metrics, bootstrap, \
+    get_f1_sed_score, get_psds_ct
 from utilities.utils import to_cuda_if_available, generate_tsv_wav_durations, meta_path_to_audio_dir
 from utilities.ManyHotEncoder import ManyHotEncoder
 from utilities.Transforms import get_transforms
@@ -27,7 +28,7 @@ def norm_alpha(x, alpha_val):
 
 
 def get_predictions_ss_late_integration(model, valid_dataload, decoder, pooling_time_ratio=1, thresholds=[0.5],
-                                        median_window=1, save_predictions=None, alpha=1):
+                                        median_window=1, save_predictions=None, alpha=1, alpha_sources=1):
     """ Get the predictions of a trained model on a specific set
     Args:
         model: torch.Module, a trained pytorch model (you usually want it to be in .eval() mode).
@@ -51,7 +52,6 @@ def get_predictions_ss_late_integration(model, valid_dataload, decoder, pooling_
     prediction_dfs = {}
     for threshold in thresholds:
         prediction_dfs[threshold] = pd.DataFrame()
-
     # Get predictions
     for i, ((input_data, _), index) in enumerate(valid_dataload):
         input_data = to_cuda_if_available(input_data)
@@ -63,7 +63,7 @@ def get_predictions_ss_late_integration(model, valid_dataload, decoder, pooling_
             logger.debug(pred_strong)
 
         pred_strong_sources = pred_strong[1:]
-        pred_strong_sources = norm_alpha(pred_strong_sources, alpha)
+        pred_strong_sources = norm_alpha(pred_strong_sources, alpha_sources)
         pred_strong_comb = norm_alpha(np.stack((pred_strong[0], pred_strong_sources), 0), alpha)
 
         # Get different post processing per threshold
@@ -96,7 +96,7 @@ def get_predictions_ss_late_integration(model, valid_dataload, decoder, pooling_
         else:
             assert len(save_predictions) == len(thresholds), \
                 f"There should be a prediction file per threshold: len predictions: {len(save_predictions)}\n" \
-                f"len thresholds: {len(thresholds)}"
+                    f"len thresholds: {len(thresholds)}"
             save_predictions = save_predictions
 
         for ind, threshold in enumerate(thresholds):
@@ -185,6 +185,13 @@ if __name__ == '__main__':
                         help="The sources to be kept from the sound_separation (each source separated by a comma)."
                              "Example: '1,2' keeps the 2nd and 3rd sources (begins at 0).")
 
+    parser.add_argument("-p", "--p", type=int, default=1,
+                        help="The p for the Lp-norm")
+    parser.add_argument("-ps", "--p_source", type=int, default=1,
+                        help="The p for the Lp-norm")
+    parser.add_argument("-b", '--bootstrap_iterations', type=int, default=200,
+                        help="Number of bootstrap samples to take (default 200, 80% taken each iteration).")
+
     # Not required after that, but recommended to defined
     parser.add_argument("-mw", "--median_window", type=int, default=None,
                         help="Nb of frames for the median window, "
@@ -196,7 +203,8 @@ if __name__ == '__main__':
                         help="Path of the groundtruth filename, (see in config, at dataset folder)")
     parser.add_argument("-s", '--save_predictions_path', type=str, default=None,
                         help="Path for the predictions to be saved (if needed)")
-
+    parser.add_argument("-res", '--store_results', type=str, default=osp.join("stored_data", "test_results"),
+                        help="Path for the results to be saved")
     # Dev only
     parser.add_argument("-n", '--nb_files', type=int, default=None,
                         help="Number of files to be used. Useful when testing on small number of files.")
@@ -210,18 +218,22 @@ if __name__ == '__main__':
     groundtruth = pd.read_csv(f_args.groundtruth_tsv, sep="\t")
 
     gt_df_feat_ss = dataset.initialize_and_get_df(f_args.groundtruth_tsv, gt_audio_dir, f_args.base_dir_ss,
-                                                  pattern_ss="_events", nb_files=f_args.nb_files,
-                                                  keep_sources=keep_sources)
+                                                  nb_files=f_args.nb_files,
+                                                  subset_sources=keep_sources)
     params = _load_state_vars(expe_state, gt_df_feat_ss, median_window)
-    alpha_norm = 1
+    alpha_norm = f_args.p
     # Preds with only one value (note that in comparison of TestModel, here we do not use a dataloader)
     single_predictions = get_predictions_ss_late_integration(params["model"], params["dataload"],
                                                              params["many_hot_encoder"].decode_strong,
                                                              params["pooling_time_ratio"],
                                                              median_window=params["median_window"],
                                                              save_predictions=f_args.save_predictions_path,
-                                                             alpha=alpha_norm)
-    compute_metrics(single_predictions, groundtruth, durations)
+                                                             alpha=alpha_norm, alpha_sources=f_args.p_source)
+
+    mean_f1, lf1, uf1 = bootstrap(single_predictions, groundtruth, get_f1_sed_score,
+                                  n_iterations=f_args.bootstrap_iterations, verbose=False)
+    logger.info(f"f1 score: {mean_f1} +- {max(mean_f1 - lf1, uf1 - mean_f1)}")
+    # f1_macro = compute_metrics(single_predictions, groundtruth, durations)
 
     # ##########
     # Optional but recommended
@@ -229,12 +241,46 @@ if __name__ == '__main__':
     # Compute psds scores with multiple thresholds (more accurate). n_thresholds could be increased.
     n_thresholds = 50
     # Example of 5 thresholds: 0.1, 0.3, 0.5, 0.7, 0.9
-    thresholds = np.arange(1 / (n_thresholds * 2), 1, 1 / n_thresholds)
+    list_thresholds = np.arange(1 / (n_thresholds * 2), 1, 1 / n_thresholds)
     pred_ss_thresh = get_predictions_ss_late_integration(params["model"], params["dataload"],
                                                          params["many_hot_encoder"].decode_strong,
                                                          params["pooling_time_ratio"],
-                                                         thresholds=thresholds,
+                                                         thresholds=list_thresholds,
                                                          median_window=params["median_window"],
-                                                         save_predictions=f_args.save_predictions_path)
-    psds = compute_psds_from_operating_points(pred_ss_thresh, groundtruth, durations)
-    psds_score(psds, filename_roc_curves=osp.splitext(f_args.save_predictions_path)[0] + "_roc.png")
+                                                         save_predictions=f_args.save_predictions_path,
+                                                         alpha=alpha_norm)
+    # psds = compute_psds_from_operating_points(pred_thresh, groundtruth, durations)
+    # fname_roc = None
+    # if f_args.save_predictions_path is not None:
+    #     fname_roc = osp.splitext(f_args.save_predictions_path)[0] + "_roc.png"
+    # psds_ct = psds_score(psds, filename_roc_curves=fname_roc)
+
+    mean_psds, lpsds, upsds = bootstrap(pred_ss_thresh, groundtruth, get_psds_ct, meta_df=durations,
+                                        n_iterations=f_args.bootstrap_iterations)
+    logger.info(f"psds score: {mean_psds} +- {max(mean_psds - lpsds, upsds - mean_psds)}")
+
+    df_res = pd.DataFrame([[f"{mean_f1 * 100:.1f}~$\pm$~{max(mean_f1 - lf1, uf1 - mean_f1) * 100:.1f}",
+                            f"{mean_psds:.3f}~$\pm$~{max(mean_psds - lpsds, upsds - mean_psds):.3f}"]],
+                          columns=["f1", "psds_ct"])
+    logger.info(df_res)
+    os.makedirs(os.path.dirname(f_args.store_results), exist_ok=True)
+    df_res.to_csv(f_args.store_results, index=False, sep="\t")
+
+
+    # compute_metrics(single_predictions, groundtruth, durations)
+    #
+    # # ##########
+    # # Optional but recommended
+    # # ##########
+    # # Compute psds scores with multiple thresholds (more accurate). n_thresholds could be increased.
+    # n_thresholds = 50
+    # # Example of 5 thresholds: 0.1, 0.3, 0.5, 0.7, 0.9
+    # thresholds = np.arange(1 / (n_thresholds * 2), 1, 1 / n_thresholds)
+    # pred_ss_thresh = get_predictions_ss_late_integration(params["model"], params["dataload"],
+    #                                                      params["many_hot_encoder"].decode_strong,
+    #                                                      params["pooling_time_ratio"],
+    #                                                      thresholds=thresholds,
+    #                                                      median_window=params["median_window"],
+    #                                                      save_predictions=f_args.save_predictions_path)
+    # psds = compute_psds_from_operating_points(pred_ss_thresh, groundtruth, durations)
+    # psds_score(psds, filename_roc_curves=osp.splitext(f_args.save_predictions_path)[0] + "_roc.png")

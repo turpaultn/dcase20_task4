@@ -142,7 +142,7 @@ class DESED:
         return desed_obj
 
     def initialize_and_get_df(self, tsv_path, audio_dir=None, audio_dir_ss=None, pattern_ss=None,
-                              ext_ss_feature_file="_ss", nb_files=None, download=False, keep_sources=None):
+                              ext_ss_feature_file="_ss", nb_files=None, download=False, subset_sources=None):
         """ Initialize the dataset, extract the features dataframes
         Args:
             tsv_path: str, tsv path in the initial dataset
@@ -153,7 +153,7 @@ class DESED:
             ext_ss_feature_file: str, only when audio_dir_ss is not None, what to add at the end of the feature files
             nb_files: int, optional, the number of file to take in the dataframe if taking a small part of the dataset.
             download: bool, optional, whether or not to download the data from the internet (youtube).
-            keep_sources: list, if sound_separation is used, it indicates which source is kept to create the features
+            subset_sources: list, if sound_separation is used, it indicates which source is kept to create the features
 
         Returns:
             pd.DataFrame
@@ -173,6 +173,8 @@ class DESED:
         fdir = audio_dir if audio_dir_ss is None else audio_dir_ss
         fdir = fdir[:-1] if fdir.endswith(osp.sep) else fdir
         subdir = osp.sep.join(fdir.split(osp.sep)[-2:])
+        if subset_sources is not None:
+            subdir += "".join(subset_sources)
         meta_feat_dir = osp.join(self.meta_feat_dir, subdir)
         feature_dir = osp.join(self.feature_dir, subdir)
         logger.debug(feature_dir)
@@ -202,7 +204,7 @@ class DESED:
         logger.info(f"Getting features ...")
         df_features = self.extract_features_from_df(df_meta, audio_dir, feature_dir,
                                                     audio_dir_ss, pattern_ss,
-                                                    ext_ss_feature_file, keep_sources)
+                                                    ext_ss_feature_file, subset_sources)
         if len(df_features) != 0:
             df_features.to_csv(features_tsv, sep="\t", index=False)
             logger.info(f"features created/retrieved in {time.time() - t:.2f}s, metadata: {features_tsv}")
@@ -278,7 +280,7 @@ class DESED:
             logger.error(e)
 
     def _extract_features_file(self, filename, audio_dir, feature_dir, audio_dir_ss=None, pattern_ss=None,
-                               ext_ss_feature_file="_ss", keep_sources=None):
+                               ext_ss_feature_file="_ss", subset_sources=None):
         wav_path = osp.join(audio_dir, filename)
         if not osp.isfile(wav_path):
             logger.error("File %s is in the tsv file but the feature is not extracted because "
@@ -295,11 +297,11 @@ class DESED:
                 out_filename = osp.join(osp.splitext(filename)[0] + ext_ss_feature_file + ".npy")
                 out_path = osp.join(feature_dir, out_filename)
                 bname, ext = osp.splitext(filename)
-                if keep_sources is None:
+                if subset_sources is None:
                     wav_paths_ss = glob.glob(osp.join(audio_dir_ss, bname + pattern_ss, "*" + ext))
                 else:
                     wav_paths_ss = []
-                    for s_ind in keep_sources:
+                    for s_ind in subset_sources:
                         audio_file = osp.join(audio_dir_ss, bname + pattern_ss, s_ind + ext)
                         assert osp.exists(audio_file), f"Audio file does not exists: {audio_file}"
                         wav_paths_ss.append(audio_file)
@@ -309,7 +311,7 @@ class DESED:
         return filename, out_path
 
     def extract_features_from_df(self, df_meta, audio_dir, feature_dir, audio_dir_ss=None, pattern_ss=None,
-                                 ext_ss_feature_file="_ss", keep_sources=None):
+                                 ext_ss_feature_file="_ss", subset_sources=None):
         """Extract log mel spectrogram features.
 
         Args:
@@ -319,7 +321,7 @@ class DESED:
             audio_dir_ss: str, the path where to find the separated files (associated to the mixture)
             pattern_ss: str, the pattern following the normal filename to match the folder to find separated sources
             ext_ss_feature_file: str, only when audio_dir_ss is not None
-            keep_sources: list, the index of the sources to be kept if sound separation is used
+            subset_sources: list, the index of the sources to be kept if sound separation is used
 
         Returns:
             pd.DataFrame containing the initial meta + column with the "feature_filename"
@@ -336,7 +338,7 @@ class DESED:
                                               audio_dir_ss=audio_dir_ss,
                                               pattern_ss=pattern_ss,
                                               ext_ss_feature_file=ext_ss_feature_file,
-                                              keep_sources=keep_sources)
+                                              subset_sources=subset_sources)
         if self.use_multiproc:
             n_jobs = multiprocessing.cpu_count() - 1
             logger.info(f"Using {n_jobs} cpus")

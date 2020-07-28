@@ -164,15 +164,20 @@ def train(train_loader, model, optimizer, c_epoch, ema_model=None, mask_weak=Non
     return loss
 
 
-def get_dfs(desed_dataset, subsets, nb_files=None, separated_sources=False, no_ps=None, reverb=None):
+def get_dfs(desed_dataset, subsets, nb_files=None, separated_sources=None, subset_sources=None,
+            no_ps=None, reverb=None):
     log = create_logger(__name__ + "/" + inspect.currentframe().f_code.co_name, terminal_level=cfg.terminal_level)
-    audio_unlabel_ss = cfg.unlabel_ss if separated_sources else None
-    audio_validation_ss = cfg.validation_ss if separated_sources else None
-    audio_synthetic_ss = cfg.synthetic_ss if separated_sources else None
+
+    # Todo find a better way to put the pattern in the name
+    audio_unlabel_ss = cfg.unlabel_ss + separated_sources if separated_sources is not None else None
+    audio_validation_ss = cfg.validation_ss + separated_sources if separated_sources is not None else None
+    audio_train_synth_ss = cfg.synthetic_train_ss + separated_sources if separated_sources is not None else None
+    audio_valid_synth_ss = cfg.synthetic_valid_ss + separated_sources if separated_sources is not None else None
+    audio_weak_ss = cfg.weak_ss + separated_sources if separated_sources is not None else None
 
     # Always take weak since we need the validation part
-    audio_weak_ss = cfg.weak_ss if separated_sources else None
-    weak_df = desed_dataset.initialize_and_get_df(cfg.weak, audio_dir_ss=audio_weak_ss, nb_files=nb_files)
+    weak_df = desed_dataset.initialize_and_get_df(cfg.weak, audio_dir_ss=audio_weak_ss, nb_files=nb_files,
+                                                  subset_sources=subset_sources)
     train_weak_df = weak_df.sample(frac=0.9)
     valid_weak_df = weak_df.drop(train_weak_df.index).reset_index(drop=True)
     train_weak_df = train_weak_df.reset_index(drop=True)
@@ -198,14 +203,15 @@ def get_dfs(desed_dataset, subsets, nb_files=None, separated_sources=False, no_p
         else:
             raise NotImplementedError("reverb in get_dfs() can be only in {None, 'valid', 'all'}")
 
-    train_synth_df = desed_dataset.initialize_and_get_df(train_synth_pth, audio_dir_ss=audio_synthetic_ss,
-                                                         nb_files=nb_files)
-    valid_synth_df = desed_dataset.initialize_and_get_df(valid_synth_pth, audio_dir_ss=audio_synthetic_ss,
-                                                         nb_files=nb_files)
+    train_synth_df = desed_dataset.initialize_and_get_df(train_synth_pth, audio_dir_ss=audio_train_synth_ss,
+                                                         nb_files=nb_files, subset_sources=subset_sources)
+    valid_synth_df = desed_dataset.initialize_and_get_df(valid_synth_pth, audio_dir_ss=audio_valid_synth_ss,
+                                                         nb_files=nb_files, subset_sources=subset_sources)
 
     log.debug(f"synthetic: {train_synth_df.head()}")
     validation_df = desed_dataset.initialize_and_get_df(cfg.validation,
-                                                        audio_dir_ss=audio_validation_ss, nb_files=nb_files)
+                                                        audio_dir_ss=audio_validation_ss, nb_files=nb_files,
+                                                        subset_sources=subset_sources)
     # Todo find a better way to avoid that
     # Put train_synth in frames so many_hot_encoder can work.
     # Not doing it for valid, because not using labels (when prediction) and event based metric expect sec.
@@ -223,13 +229,14 @@ def get_dfs(desed_dataset, subsets, nb_files=None, separated_sources=False, no_p
 
     # Unlabel is only for training
     if "unlabel" in subsets:
-        unlabel_df = desed_dataset.initialize_and_get_df(cfg.unlabel, audio_dir_ss=audio_unlabel_ss, nb_files=nb_files)
+        unlabel_df = desed_dataset.initialize_and_get_df(cfg.unlabel, audio_dir_ss=audio_unlabel_ss, nb_files=nb_files,
+                                                         subset_sources=subset_sources)
         data_dfs["unlabel"] = unlabel_df
 
     return data_dfs
 
 
-def set_model_name(subsets):
+def set_model_name(subsets, separated_sources=None):
     add_model_name = ""
     if "synthetic" in subsets:
         add_model_name += "_s"
@@ -237,6 +244,8 @@ def set_model_name(subsets):
         add_model_name += "_u"
     if "weak" in subsets:
         add_model_name += "_w"
+    if separated_sources is not None:
+        add_model_name += ss_pattern
     return add_model_name
 
 
@@ -316,6 +325,11 @@ if __name__ == '__main__':
                         help="If pitch shifting not wanted, values possible: ['valid', all']")
     parser.add_argument("--reverb", type=str, default=None,
                         help="If reverb wants to be applied, values possible: ['valid', all']")
+
+    parser.add_argument("-ss", "--ss_pattern", type=str, default=None,
+                        help="If using this option, make sure you config.py points to the right folders")
+    parser.add_argument("-k", "--keep_sources", type=str, default="")
+    parser.add_argument("-cnn", "--cnn_integration", action="store_true")
     f_args = parser.parse_args()
     pprint(vars(f_args))
 
@@ -333,17 +347,33 @@ if __name__ == '__main__':
             if val not in ["synthetic", "unlabel", "weak"]:
                 raise NotImplementedError("Available subsets are: 'synthetic', 'unlabel' and 'weak'")
 
+    ss_pattern = f_args.ss_pattern
+    subset_sources = f_args.keep_sources.split(",")
+
+    # Model and transform parameters different for source separated
+    if ss_pattern is not None:
+        # Todo reput normal
+        n_channel = len(subset_sources) + 1  # Should be changed if combine channels used
+        add_axis_conv = None
+        # Todo, remove if needed
+        cnn_integration = f_args.cnn_integration
+        train_cnn = True
+    else:
+        n_channel = 1
+        add_axis_conv = 0
+        cnn_integration = False
+        train_cnn = True
+
     # ##########
     # General params
     # #########
-    n_channel = 1
-    add_axis_conv = 0
     # Model taken from 2nd of dcase19 challenge: see Delphin-Poulat2019 in the results.
     n_layers = 7
     crnn_kwargs = {"n_in_channel": n_channel, "nclass": len(cfg.classes), "attention": True, "n_RNN_cell": 128,
                    "n_layers_RNN": 2,
                    "activation": "glu",
                    "dropout": 0.5,
+                   "cnn_integration": cnn_integration,
                    "kernel_size": n_layers * [3], "padding": n_layers * [1], "stride": n_layers * [1],
                    "nb_filters": [16,  32,  64,  128,  128, 128, 128],
                    "pooling": [[2, 2], [2, 2], [1, 2], [1, 2], [1, 2], [1, 2], [1, 2]]}
@@ -371,8 +401,9 @@ if __name__ == '__main__':
     # DATA
     # ##############
     dataset = DESED(base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"),
-                    compute_log=False, use_multiprocessing=False)
-    dfs = get_dfs(dataset, subset_list, reduced_number_of_data, no_ps=f_args.no_ps, reverb=f_args.reverb)
+                    compute_log=False, use_multiprocessing=True)
+    dfs = get_dfs(dataset, subset_list, reduced_number_of_data, separated_sources=ss_pattern,
+                  subset_sources=subset_sources, no_ps=f_args.no_ps, reverb=f_args.reverb)
 
     list_dataset, batch_sizes, strong_mask, weak_mask = set_train_dataset(subset_list, dfs, encod_func, batch_sizes)
 
@@ -456,12 +487,11 @@ if __name__ == '__main__':
     save_best_cb = SaveBest("sup")
     if cfg.early_stopping is not None:
         early_stopping_call = EarlyStopping(patience=cfg.early_stopping, val_comp="sup", init_patience=cfg.es_init_wait)
-
     # ##############
     # Train
     # ##############
     results = pd.DataFrame(columns=["loss", "valid_synth_f1", "weak_metric", "global_valid"])
-    for epoch in range(2):#cfg.n_epoch):
+    for epoch in range(cfg.n_epoch):
         crnn.train()
         crnn_ema.train()
         crnn, crnn_ema = to_cuda_if_available(crnn, crnn_ema)

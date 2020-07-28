@@ -23,7 +23,8 @@ eval_desed = os.path.join(workspace, "dataset/metadata/eval/public.tsv")
 # Separated data
 weak_ss = os.path.join(workspace, 'dataset/audio/train/weak_ss/separated_sources')
 unlabel_ss = os.path.join(workspace, 'dataset/audio/train/unlabel_in_domain_ss/separated_sources')
-synthetic_ss = os.path.join(workspace, 'dataset/audio/train/synthetic20/separated_sources')
+synthetic_train_ss = os.path.join(workspace, 'dataset/audio/train/synthetic20_train/separated_sources')
+synthetic_valid_ss = os.path.join(workspace, 'dataset/audio/validation/synthetic20_validation/separated_sources')
 validation_ss = os.path.join(workspace, 'dataset/audio/validation/validation_ss/separated_sources')
 eval_desed_ss = os.path.join(workspace, "dataset/audio/eval/public_ss/separated_sources")
 
@@ -46,10 +47,10 @@ mel_f_max = 8000.
 max_consistency_cost = 2
 
 # Training
-in_memory = True
+in_memory = False
 in_memory_unlab = False
 num_workers = 8
-batch_size = 24
+batch_size = 12
 
 n_epoch = 200
 n_epoch_rampup = 50
@@ -57,7 +58,7 @@ n_epoch_rampup = 50
 checkpoint_epochs = 1
 save_best = True
 early_stopping = None
-es_init_wait = 50  # es for early stopping
+es_init_wait = 100  # es for early stopping
 max_learning_rate = 0.001  # Used if adjust_lr is True
 default_learning_rate = 0.001  # Used if adjust_lr is False
 

@@ -122,7 +122,7 @@ if __name__ == '__main__':
 
     pdf_files = glob.glob(os.path.join(args.input_dir, "*.pdf"))
     if len(pdf_files) == 0:
-        raise IndexError("You need to upload a report in your submission")
+        raise IndexError(f"You need to upload a report in your submission: {args.input_dir}")
 
     with open(os.path.join(args.input_dir, "validated"), "w") as f:
         f.write("Submission validated")

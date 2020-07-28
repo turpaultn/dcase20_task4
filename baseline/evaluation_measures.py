@@ -416,7 +416,9 @@ def compute_psds_from_operating_points(list_predictions, groundtruth_df, meta_df
 
 
 def get_f1_sed_score(predictions, gtruth_df, verbose=False):
-    events_metric = compute_sed_eval_metrics(predictions, gtruth_df, verbose=verbose)
+    events_metric = event_based_evaluation_df(gtruth_df, predictions, t_collar=0.200, percentage_of_length=0.2)
+    if verbose:
+        logger.info(events_metric)
     macro_f1_event = events_metric.results_class_wise_average_metrics()['f_measure']['f_measure']
     return macro_f1_event
 
@@ -466,8 +468,22 @@ class MyPool(multiprocessing.pool.Pool):
     Process = NoDaemonProcess
 
 
-def bootstrap_iter(pred, gtruth, metric, frac, _, **kwargs):
-    names_kept = gtruth.filename.drop_duplicates().sample(frac=frac)
+def _bootstrap_iter(pred, gtruth, metric, frac, random_state=None, **kwargs):
+    """ Every call of the bootstrap function
+    Args:
+        pred: pd.DataFrame, the dataframe containing the predictions
+        gtruth: pd.DataFrame, the dataframe containing the groundtruth
+        metric: function, a function that will be called like this: f(pred, gtruth, **kwargs)
+            and return the value of the metric wanted
+        frac: float, in [0,1], the amount of data for each loop of bootstrap
+        random_state: int or numpy.random.RandomState, to seed the random generator when sampling the data
+            (allow reproducibility)
+        **kwargs: additional arguments of `metric`
+
+    Returns:
+        The metric returned by the function metric
+    """
+    names_kept = gtruth.filename.drop_duplicates().sample(frac=frac, random_state=random_state)
     if isinstance(pred, list):
         pred_bt = []
         for pdf in pred:
@@ -480,7 +496,23 @@ def bootstrap_iter(pred, gtruth, metric, frac, _, **kwargs):
 
 
 def bootstrap(pred, gtruth, metric, n_iterations=200, frac=0.8, confidence=0.9, **kwargs):
-    bt_iter = functools.partial(bootstrap_iter, pred, gtruth, metric, frac, **kwargs)
+    """ Apply bootstrap over a metric
+    Args:
+        pred: pd.DataFrame, the dataframe containing the predictions
+        gtruth: pd.DataFrame, the dataframe containing the groundtruth
+        metric: function, a function that will be called like this: f(pred, gtruth, **kwargs)
+            and return the value of the metric wanted
+        n_iterations: int, the number of iterations to apply bootstrap
+        frac: float, in [0,1], the amount of data for each loop of bootstrap
+        confidence: float, in [0,1], the confidence interval to be used.
+        **kwargs: additional arguments of `metric`
+
+    Returns:
+        (float, float, float)
+        (Mean value, the lower value of the interval, the upper value of the interval)
+
+    """
+    bt_iter = functools.partial(_bootstrap_iter, pred, gtruth, metric, frac, **kwargs)
     with closing(MyPool(multiprocessing.cpu_count() - 1)) as pool:
         result_metrics = pool.map(bt_iter, range(n_iterations))
     result_metrics.sort()
