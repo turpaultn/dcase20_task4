@@ -322,14 +322,25 @@ if __name__ == '__main__':
     parser.add_argument("-r", "--rampup", type=str, default="all",
                         help="Rampup applied or not, possible values: {'lr', 'consistency', 'all'}")
     parser.add_argument("-np", "--no_ps", type=str, default=None,
-                        help="If pitch shifting not wanted, values possible: ['valid', all']")
+                        help="The pitch shifted data need to be computed to use this, "
+                             "see `scripts/generate_new_synthetic_data_no_ps.sh`. "
+                             "If pitch shifting not wanted, values possible: ['valid', all']")
     parser.add_argument("--reverb", type=str, default=None,
-                        help="If reverb wants to be applied, values possible: ['valid', all']")
+                        help="The reverbed data need to be computed to use this, see `scripts/reverberateXXX.sh`. "
+                             "If reverb wants to be applied, values possible: ['valid', all']")
 
     parser.add_argument("-ss", "--ss_pattern", type=str, default=None,
-                        help="If using this option, make sure you config.py points to the right folders")
-    parser.add_argument("-k", "--keep_sources", type=str, default="")
-    parser.add_argument("-cnn", "--cnn_integration", action="store_true")
+                        help="Use sound separation, data needs to be separated, see `scripts/separateXXX.sh`. "
+                             "If using this option, make sure you config.py points to the right folders "
+                             "(the pattern needs to correspond to your separated data)")
+    parser.add_argument("-k", "--keep_sources", type=str, default="",
+                        help="Used only when `ss_pattern` is defined. "
+                             "Which sources to be kept from the sound separation model.")
+    parser.add_argument("-int", "--integration", type=str, default="early",
+                        help="Used only when `ss_pattern` is defined. "
+                             "Which integration to be used when dealing with sound separation {'early', 'middle'}"
+                             "accepted since late integration does not involve training, "
+                             "run main.py without source separation and see TestModel_ss_late_integration.py")
     f_args = parser.parse_args()
     pprint(vars(f_args))
 
@@ -352,11 +363,14 @@ if __name__ == '__main__':
 
     # Model and transform parameters different for source separated
     if ss_pattern is not None:
-        # Todo reput normal
         n_channel = len(subset_sources) + 1  # Should be changed if combine channels used
+        if f_args.integration == "early":
+            cnn_integration = False
+        elif f_args.integration == "middle":
+            cnn_integration = True
+        else:
+            raise NotImplementedError("integration must be 'early' or 'middle' when set")
         add_axis_conv = None
-        # Todo, remove if needed
-        cnn_integration = f_args.cnn_integration
         train_cnn = True
     else:
         n_channel = 1
@@ -592,15 +606,3 @@ if __name__ == '__main__':
                           columns=["f1", "psds_ct"])
     logger.info(df_res)
     df_res.to_csv(os.path.join("stored_data", "results.tsv"), index=False, sep="\t")
-    # # ##########
-    # # Optional but recommended
-    # # ##########
-    # # Compute psds scores with multiple thresholds (more accurate). n_thresholds could be increased.
-    # n_thresholds = 50
-    # # Example of 5 thresholds: 0.1, 0.3, 0.5, 0.7, 0.9
-    # list_thresholds = np.arange(1 / (n_thresholds * 2), 1, 1 / n_thresholds)
-    # pred_thresh = get_predictions(crnn, validation_dataloader, many_hot_encoder.decode_strong,
-    #                               pooling_time_ratio, thresholds=list_thresholds, median_window=median_window,
-    #                               save_predictions=predicitons_fname)
-    # psds = compute_psds_from_operating_points(pred_thresh, validation_labels_df, durations_validation)
-    # psds_score(psds, filename_roc_curves=os.path.join(saved_pred_dir, "figures/psds_roc.png"))
