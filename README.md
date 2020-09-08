@@ -4,8 +4,12 @@
 - You can find discussion about the dcase challenge here: [dcase-discussions]. 
 - This task follows [dcase2019-task4]. More info about 2019: 
 [Turpault et al.][paper2019-description], [Serizel et al.][paper2019-eval] 
+- Papers associated: [Sound separation + SED paper][ss_sed_paper] and [SED paper][sed_paper]
+- More information about sound separation process can be found in Google repo: [FUSS][fuss-repo-model]
 
 ## Updates
+- **`Important update`** 8th September 2020: Code associated to papers [ss_sed_paper] and [sed_paper] 
+available in the branch `papers_code`
 - 9th March 2020: update `scripts` to get the recorded data in the download.
 - 18th March 2020: update the `DESED_synth_dcase20_train_jams.tar`on [DESED_synthetic][synthetic_dataset] 
 and comment reverb since we do not use it for the baseline.
@@ -25,6 +29,13 @@ for Linux based system:
 1. [install Ananconda][anaconda_download]
 2. launch `conda_create_environment.sh` (recommended line by line)
 
+## Papers code
+
+If you are on this repo and searching for the code assoctiated to:
+- [*Training sound event detection on a heterogeneous dataset*][sed_paper]
+- [*Improving sound event detection in domestic environments using sound separation*][ss_sed_paper]
+
+Please go to the branch `papers_code`.
 
 ## Submission
 
@@ -283,6 +294,8 @@ In Proceedings of the 21st ACM international conference on Multimedia, 411–412
 [paper2019-eval]: https://hal.inria.fr/hal-02355573
 [paper-psds]: https://arxiv.org/pdf/1910.08440.pdf
 [Scaper]: https://github.com/justinsalamon/scaper
+[sed_paper]: https://hal.inria.fr/hal-02891665
+[ss_sed_paper]: https://hal.inria.fr/hal-02891700
 [synthetic_dataset]: https://doi.org/10.5281/zenodo.3550598
 [submission_page]: http://dcase.community/challenge2020/submission
 [website]: http://dcase.community/challenge2020/
