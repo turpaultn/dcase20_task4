@@ -12,22 +12,20 @@ AUDIO_PATH_EVAL=${BASE_DATASET}/audio/eval_label/youtube
 # Change synthetic20 to synthetic20_reverb if you want to separate the reverbed data
 SCRIPTS_PATH=../data_generation
 
-# Download the checkpoint model from FUSS baseline
-# If you want to use another model from Google, just change the path of the CHECKPOINT_MODEL and INFERENCE_META
-# Todo, download the models from somewhere (shareable by Google team) if not already done
-#wget -O FUSS_DESED_baseline_dry_2_model.tar.gz https://zenodo.org/record/3743844/files/FUSS_DESED_baseline_dry_2_model.tar.gz
-#tar -xzf FUSS_DESED_baseline_dry_2_model.tar.gz
-#rm FUSS_DESED_baseline_dry_2_model.tar.gz
-#mv fuss_desed_baseline_dry_2_model ../fuss_desed_baseline_dry_2_model
-
-
-declare -a models=(dry_1 dry_2 dry_4 dry_4np dry_5 dry_6)
+mkdir -p ../ss_model
+declare -a models=(dry_1 dry_2 dry_4 dry_4np dry_6)
 
 for model_name in "${models[@]}"
 do
-	checkpoint_model=../ss_model/fuss_desed_${model_name}model
-	inference=../ss_model/fuss_desed_${model_name}inference.meta
+	# Download the checkpoint model from FUSS baseline (can be commented if already done)
+	wget -O FUSS_DESED_baseline_${model_name}_model.tar.gz https://zenodo.org/record/4012661/files/FUSS_DESED_baseline_${model_name}_model.tar.gz
+	tar -xzf FUSS_DESED_baseline_${model_name}_model.tar.gz
+	mv fuss_desed_baseline_${model_name}_model/* ../ss_model/
+	rm -r fuss_desed_baseline_${model_name}_model
 
+	# Run inference on the different datasets
+	checkpoint_model=../ss_model/fuss_desed_${model_name}_model
+	inference=../ss_model/fuss_desed_${model_name}_inference.meta
 	# Recorded data
 	declare -a arr=(${AUDIO_PATH_WEAK} ${AUDIO_PATH_UNLABEL} ${AUDIO_PATH_VALIDATION} ${AUDIO_PATH_EVAL})
 
@@ -39,7 +37,7 @@ do
 	   # or do whatever with individual element of the array
 	done
 
-	for subset in train validation
+	for subset in train validation #eval # eval can be uncommented if necessary
 	do
 		audio_synth=${BASE_DATASET}/audio/${subset}/synthetic20_${subset}/soundscapes
 		sources_synth=${BASE_DATASET}/audio/${subset}/synthetic20_${subset}/separated_sources_${model_name}

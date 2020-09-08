@@ -46,6 +46,9 @@ to see the experiments with these sets.
 - `generate_new_synthetic_data_no_ps.sh` generate train and validation data without pitch shifting.
 - `reverberate_data_no_ps_reverbed.sh` generate validation data without pitch shifting but reverbed.
 
+## DESED-FUSS experiments
+
+- `separate_mixtures_expes.sh` downloads models and separates sources
 
 
 [desed_synth]: https://doi.org/10.5281/zenodo.3550598
