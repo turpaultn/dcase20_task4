@@ -131,6 +131,9 @@ See [baseline] folder.
 
 ## Dataset
 
+All the scripts to get the data (soundbank, generated, separated) are in the `scripts` folder 
+and they use python files from `data_generation` folder.
+
 ### Scripts to generate the dataset
 
 In the [`scripts/`][scripts] folder, you can find the different steps to:
