@@ -335,7 +335,7 @@ if __name__ == '__main__':
                              "(the pattern needs to correspond to your separated data)")
     parser.add_argument("-k", "--keep_sources", type=str, default="",
                         help="Used only when `ss_pattern` is defined. "
-                             "Which sources to be kept from the sound separation model.")
+                             "Which sources to be kept from the sound separation model separated by a comma.")
     parser.add_argument("-int", "--integration", type=str, default="early",
                         help="Used only when `ss_pattern` is defined. "
                              "Which integration to be used when dealing with sound separation {'early', 'middle'}"

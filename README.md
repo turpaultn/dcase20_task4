@@ -77,6 +77,27 @@ To get the predictions of the combination of SED and SS we do as follow:
 - Apply thresholds (different for F-scores and psds)
 - Apply median filtering (0.45s)
 
+### Reproduction of models from papers_code branch
+
+Check the options in `main.py` especially `ss_pattern`, `keep_sources`, `no_ps` and `reverb``
+
+Example of an experiment launched:
+- `python main.py -ss dry_2 -k 1` this commands launch the experiments with sound separation of DmFm in the paper 
+[*Improving sound event detection in domestic environments using sound separation*][ss_sed_paper].
+
+Table of correspondance of the names in the papers and in the code (+sources):
+
+Paper name          | Code name     | Sources kept in the paper |
+--------------------|---------------|---------------------------|
+DmFm                | dry_1         | 0                         |
+BgFgFm              | dry_2         | 1                         |
+PIT                 | dry_4         | 2,3,4,5,6                 |
+Classwise           | dry_4np       | 0,1,2,3,4,5,6,7,8,9       |
+GroupPIT            | dry_6         | 5,6,7,8,9                 |
+FUSS-trained SS rev | baseline      | 0,1,2,3                   |
+FUSS-trained SS dry | baseline_dry  | 0,1,2,3                   |
+
+
 ### Results
 
 System performance are reported in term of event-based F-scores [[1]] 
@@ -190,6 +211,13 @@ The dataset for sound event detection of DCASE2020 task 4 is composed of:
 - No new training involved
 - Validation:
 	- validation + validation_ss/separated_sources
+	
+##### New experiments
+
+We generate new data:
+- No pitch shifting: `generate_new_synthetic_data_no_ps.sh`
+- Reverberation and no pitch shifting: `reverberate_data_no_ps_reverbed.sh`
+- Separate soundscapes with the multiple models involved: `separate_mixtures_expes.sh`
 
 ### Annotation format
 

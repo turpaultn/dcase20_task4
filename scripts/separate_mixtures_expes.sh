@@ -7,7 +7,7 @@ BASE_DATASET=../dataset
 AUDIO_PATH_WEAK=${BASE_DATASET}/audio/train/weak
 AUDIO_PATH_UNLABEL=${BASE_DATASET}/audio/train/unlabel_in_domain
 AUDIO_PATH_VALIDATION=${BASE_DATASET}/audio/validation/validation
-AUDIO_PATH_EVAL=${BASE_DATASET}/audio/eval_label/youtube
+AUDIO_PATH_EVAL=${BASE_DATASET}/audio/eval/public
 
 # Change synthetic20 to synthetic20_reverb if you want to separate the reverbed data
 SCRIPTS_PATH=../data_generation

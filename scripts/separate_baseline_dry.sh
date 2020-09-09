@@ -7,22 +7,19 @@ BASE_DATASET=../dataset
 AUDIO_PATH_WEAK=${BASE_DATASET}/audio/train/weak
 AUDIO_PATH_UNLABEL=${BASE_DATASET}/audio/train/unlabel_in_domain
 AUDIO_PATH_VALIDATION=${BASE_DATASET}/audio/validation/validation
-AUDIO_PATH_EVAL=${BASE_DATASET}/audio/eval_label/youtube
+AUDIO_PATH_EVAL=${BASE_DATASET}/audio/eval/public
 
 # Change synthetic20 to synthetic20_reverb if you want to separate the reverbed data
 SCRIPTS_PATH=../data_generation
 
-# Download the checkpoint model from FUSS baseline
-# If you want to use another model from Google, just change the path of the CHECKPOINT_MODEL and INFERENCE_META
-# Todo, download the models from somewhere (shareable by Google team) if not already done
-#wget -O FUSS_DESED_baseline_dry_2_model.tar.gz https://zenodo.org/record/3743844/files/FUSS_DESED_baseline_dry_2_model.tar.gz
-#tar -xzf FUSS_DESED_baseline_dry_2_model.tar.gz
-#rm FUSS_DESED_baseline_dry_2_model.tar.gz
-#mv fuss_desed_baseline_dry_2_model ../fuss_desed_baseline_dry_2_model
+wget -O FUSS_baseline_dry_model.tar.gz https://zenodo.org/record/4012661/files/FUSS_DESED_baseline_dry_model.tar.gz
+tar -xzf FUSS_baseline_dry_model.tar.gz
+mv fuss_baseline_dry_model/* ../ss_model/
+rm -r fuss_baseline_dry_model
 
 
-checkpoint_model=../ss_model/baseline_model
-inference=../ss_model/baseline_inference.meta
+checkpoint_model=../ss_model/baseline_dry_model
+inference=../ss_model/baseline_dry_inference.meta
 
 # Recorded data
 declare -a arr=(${AUDIO_PATH_WEAK} ${AUDIO_PATH_UNLABEL} ${AUDIO_PATH_VALIDATION} ${AUDIO_PATH_EVAL})
