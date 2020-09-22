@@ -182,7 +182,7 @@ if __name__ == '__main__':
     # we also need to generate a new DataFrame with the right values
     df = pd.read_csv(out_tsv, sep="\t")
     df["onset"] += add_onset
-    df["offset"] = df["offset"].apply(lambda x: min(x, add_onset))
+    df["offset"] = df["offset"].apply(lambda x: min(10, x + add_onset))
     df.to_csv(osp.join(out_tsv_folder, "5500ms.tsv"),
               sep="\t", float_format="%.3f", index=False)
 
@@ -194,6 +194,6 @@ if __name__ == '__main__':
     generate_files_from_jams(list_jams9500, out_folder_9500, out_folder_9500)
     df = pd.read_csv(out_tsv, sep="\t")
     df["onset"] += add_onset
-    df["offset"] = df["offset"].apply(lambda x: min(x, add_onset))
+    df["offset"] = df["offset"].apply(lambda x: min(10, x + add_onset))
     df.to_csv(osp.join(out_tsv_folder, "9500ms.tsv"),
               sep="\t", float_format="%.3f", index=False)
