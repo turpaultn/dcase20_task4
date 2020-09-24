@@ -151,8 +151,7 @@ if __name__ == '__main__':
     mean_f1, lf1, uf1 = bootstrap(single_predictions, groundtruth, get_f1_sed_score,
                                   n_iterations=f_args.bootstrap_iterations, verbose=False)
     logger.info(f"f1 score: {mean_f1} +- {max(mean_f1 - lf1, uf1 - mean_f1)}")
-
-
+    # Without bootstrap
     # f1_macro = compute_metrics(single_predictions, groundtruth, durations)
 
     # ##########
@@ -167,6 +166,7 @@ if __name__ == '__main__':
                                   params["many_hot_encoder"].decode_strong, params["pooling_time_ratio"],
                                   thresholds=list_thresholds, median_window=params["median_window"],
                                   save_predictions=f_args.save_predictions_path)
+    # Without bootstrap
     # psds = compute_psds_from_operating_points(pred_thresh, groundtruth, durations)
     # fname_roc = None
     # if f_args.save_predictions_path is not None:

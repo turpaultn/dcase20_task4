@@ -176,7 +176,9 @@ if __name__ == '__main__':
     parser.add_argument("-m", '--model_path', type=str, required=True,
                         help="Path of the model to be evaluated")
     parser.add_argument("-g", '--groundtruth_tsv', type=str, required=True,
-                        help="Path of the groundtruth tsv file")
+                        help="Path of the groundtruth tsv file, if label not in this file, "
+                             "will just compute predictions, so do not forget to specify -s")
+
     # Source separation
     parser.add_argument("-a", '--base_dir_ss', type=str, required=True,
                         help="Base directory of source separation. "
@@ -215,7 +217,6 @@ if __name__ == '__main__':
 
     expe_state = torch.load(model_path, map_location="cpu")
     dataset = DESED(base_feature_dir=os.path.join(cfg.workspace, "dataset", "features"), compute_log=False)
-    groundtruth = pd.read_csv(f_args.groundtruth_tsv, sep="\t")
 
     gt_df_feat_ss = dataset.initialize_and_get_df(f_args.groundtruth_tsv, gt_audio_dir, f_args.base_dir_ss,
                                                   nb_files=f_args.nb_files,
@@ -230,10 +231,12 @@ if __name__ == '__main__':
                                                              save_predictions=f_args.save_predictions_path,
                                                              alpha=alpha_norm, alpha_sources=f_args.p_source)
 
-    mean_f1, lf1, uf1 = bootstrap(single_predictions, groundtruth, get_f1_sed_score,
+    groundtruth = pd.read_csv(f_args.groundtruth_tsv, sep="\t")
+    if "event_label" in groundtruth.columns:
+        mean_f1, lf1, uf1 = bootstrap(single_predictions, groundtruth, get_f1_sed_score,
                                   n_iterations=f_args.bootstrap_iterations, verbose=False)
-    logger.info(f"f1 score: {mean_f1} +- {max(mean_f1 - lf1, uf1 - mean_f1)}")
-    # f1_macro = compute_metrics(single_predictions, groundtruth, durations)
+        logger.info(f"f1 score: {mean_f1} +- {max(mean_f1 - lf1, uf1 - mean_f1)}")
+        # f1_macro = compute_metrics(single_predictions, groundtruth, durations)
 
     # ##########
     # Optional but recommended
@@ -254,33 +257,17 @@ if __name__ == '__main__':
     # if f_args.save_predictions_path is not None:
     #     fname_roc = osp.splitext(f_args.save_predictions_path)[0] + "_roc.png"
     # psds_ct = psds_score(psds, filename_roc_curves=fname_roc)
+    if "event_label" in groundtruth.columns:
+        mean_psds, lpsds, upsds = bootstrap(pred_ss_thresh, groundtruth, get_psds_ct, meta_df=durations,
+                                            n_iterations=f_args.bootstrap_iterations)
+        logger.info(f"psds score: {mean_psds} +- {max(mean_psds - lpsds, upsds - mean_psds)}")
 
-    mean_psds, lpsds, upsds = bootstrap(pred_ss_thresh, groundtruth, get_psds_ct, meta_df=durations,
-                                        n_iterations=f_args.bootstrap_iterations)
-    logger.info(f"psds score: {mean_psds} +- {max(mean_psds - lpsds, upsds - mean_psds)}")
+        df_res = pd.DataFrame([[f"{mean_f1 * 100:.1f}~$\pm$~{max(mean_f1 - lf1, uf1 - mean_f1) * 100:.1f}",
+                                f"{mean_psds:.3f}~$\pm$~{max(mean_psds - lpsds, upsds - mean_psds):.3f}"]],
+                              columns=["f1", "psds_ct"])
+        logger.info(df_res)
+        os.makedirs(os.path.dirname(f_args.store_results), exist_ok=True)
+        df_res.to_csv(f_args.store_results, index=False, sep="\t")
 
-    df_res = pd.DataFrame([[f"{mean_f1 * 100:.1f}~$\pm$~{max(mean_f1 - lf1, uf1 - mean_f1) * 100:.1f}",
-                            f"{mean_psds:.3f}~$\pm$~{max(mean_psds - lpsds, upsds - mean_psds):.3f}"]],
-                          columns=["f1", "psds_ct"])
-    logger.info(df_res)
-    os.makedirs(os.path.dirname(f_args.store_results), exist_ok=True)
-    df_res.to_csv(f_args.store_results, index=False, sep="\t")
-
-
-    # compute_metrics(single_predictions, groundtruth, durations)
-    #
-    # # ##########
-    # # Optional but recommended
-    # # ##########
-    # # Compute psds scores with multiple thresholds (more accurate). n_thresholds could be increased.
-    # n_thresholds = 50
-    # # Example of 5 thresholds: 0.1, 0.3, 0.5, 0.7, 0.9
-    # thresholds = np.arange(1 / (n_thresholds * 2), 1, 1 / n_thresholds)
-    # pred_ss_thresh = get_predictions_ss_late_integration(params["model"], params["dataload"],
-    #                                                      params["many_hot_encoder"].decode_strong,
-    #                                                      params["pooling_time_ratio"],
-    #                                                      thresholds=thresholds,
-    #                                                      median_window=params["median_window"],
-    #                                                      save_predictions=f_args.save_predictions_path)
     # psds = compute_psds_from_operating_points(pred_ss_thresh, groundtruth, durations)
     # psds_score(psds, filename_roc_curves=osp.splitext(f_args.save_predictions_path)[0] + "_roc.png")
