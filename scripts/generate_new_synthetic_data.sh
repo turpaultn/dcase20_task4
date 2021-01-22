@@ -7,7 +7,7 @@
 # Change paths by yours
 #DIR_PATH=../synthetic
 DIR_PATH=..
-SB_BASE=../../../walle/soundbank
+SB_BASE=../synthetic
 SUBSET=train  # The soundbank set to use (+ event_occurences values)
 SOUNDBANK_PATH=${SB_BASE}/audio/${SUBSET}/soundbank
 OUT_PATH=${DIR_PATH}/dataset/audio/${SUBSET}/synthetic20_${SUBSET}

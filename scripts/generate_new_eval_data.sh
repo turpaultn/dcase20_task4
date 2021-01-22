@@ -6,7 +6,7 @@
 
 # Change paths by yours
 DIR_PATH=..
-SB_BASE=../../../walle/soundbank
+SB_BASE=../synthetic
 
 # Normal set
 SUBSET=eval  # The soundbank set to use (+ event_occurences values)
