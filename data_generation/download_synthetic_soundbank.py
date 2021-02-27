@@ -1,7 +1,7 @@
 import argparse
 import time
 
-from desed import download_soundbank
+from desed import download_desed_soundbank
 from desed.utils import create_folder
 
 if __name__ == '__main__':
@@ -12,5 +12,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     create_folder(args.basedir)
-    download_soundbank(args.basedir, sins_bg=True, tut_bg=True, split_train_valid=True)
+    download_desed_soundbank(args.basedir, sins_bg=True, tut_bg=True, split_train_valid=True)
     print("Synthetic soundbank downloaded")
