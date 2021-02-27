@@ -15,7 +15,6 @@
 
 import collections
 import os
-
 import tensorflow.compat.v1 as tf
 
 
@@ -126,7 +125,8 @@ def wavs_to_dataset(file_list,
                     max_sources_override=None,
                     num_examples=-1,
                     shuffle_buffer_size=50,
-                    repeat=True):
+                    repeat=True,
+                    num_mics=1):
   r"""Fetches features from list of wav files.
 
   Args:
@@ -165,6 +165,7 @@ def wavs_to_dataset(file_list,
     num_examples: Limit number of examples to this value.  Unlimited if -1.
     shuffle_buffer_size: The size of the shuffle buffer.
     repeat: If True, repeat the dataset.
+    num_mics: The expected number of mics in source wav files.
 
   Returns:
     A batch_size number of features constructed from wav files.
@@ -180,8 +181,6 @@ def wavs_to_dataset(file_list,
 
   if not combine_by_class:
     # Not combining by class.
-    if max_sources_override and max_sources_override > max_component_sources:
-      max_component_sources = max_sources_override
     max_combined_sources = max_component_sources
 
   else:
@@ -259,14 +258,15 @@ def wavs_to_dataset(file_list,
   # Read in wav files.
   def decode_wav(wav):
     audio_bytes = tf.read_file(wav)
-    waveform, _ = tf.audio.decode_wav(audio_bytes, desired_channels=1,
+    waveform, _ = tf.audio.decode_wav(audio_bytes, desired_channels=num_mics,
                                       desired_samples=num_samples)
-    waveform = tf.reshape(waveform, (1, num_samples))
+    waveform = tf.transpose(waveform)
+    waveform = tf.reshape(waveform, (num_mics, num_samples))
     return waveform
 
   def decode_wav_or_return_zeros(wav):
     return tf.cond(tf.equal(wav, '0'),
-                   lambda: tf.zeros((1, num_samples), dtype=tf.float32),
+                   lambda: tf.zeros((num_mics, num_samples), dtype=tf.float32),
                    lambda: decode_wav(wav))
 
   dataset = tf.data.Dataset.from_tensor_slices(wavs)
@@ -284,10 +284,10 @@ def wavs_to_dataset(file_list,
 
   # Build mixture and sources waveforms.
   def combine_mixture_and_sources(waveforms):
-    # waveforms is shape (max_combined_sources, 1, num_samples).
+    # waveforms is shape (max_combined_sources, num_mics, num_samples).
     mixture_waveform = tf.reduce_sum(waveforms, axis=0)
     source_waveforms = tf.reshape(waveforms,
-                                  (max_combined_sources, 1, num_samples))
+                                  (max_combined_sources, num_mics, num_samples))
     return {'receiver_audio': mixture_waveform,
             'source_images': source_waveforms}
   dataset = dataset.map(combine_mixture_and_sources)

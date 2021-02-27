@@ -7,7 +7,7 @@ import pandas as pd
 from pprint import pformat
 import time
 from desed.logger import create_logger
-from desed.download_real import download
+from desed.download import download_audioset_files
 
 
 LOG = create_logger("DESED_real")
@@ -18,8 +18,9 @@ def download_from_csv(csv_path, result_dir, missing_files_folder):
     # read metadata file and get only one filename once
     df = pd.read_csv(csv_path, header=0, sep='\t')
     filenames_test = df["filename"].drop_duplicates()
-    download(filenames_test, result_dir, n_jobs=N_JOBS, chunk_size=CHUNK_SIZE,
-             base_dir_missing_files=missing_files_folder)
+    missing_tsv = os.path.join(missing_files_folder, "missing_files_" + os.path.basename(csv_path))
+    download_audioset_files(filenames_test, result_dir, n_jobs=N_JOBS, chunk_size=CHUNK_SIZE,
+                            missing_files_tsv=missing_tsv)
     LOG.info("###### DONE #######")
 
 
