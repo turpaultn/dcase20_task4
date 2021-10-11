@@ -1,11 +1,11 @@
 
-## PLG-MT for SED
+## Couple Learning for SED
 
 - This repository provides the data and source code for sound event detection (SED) task.
-- The improvement of the PLG-MT method is verified on the basis of the dcase20-task4 baseline.
+- The improvement of the Couple Learning method is verified on the basis of the dcase20-task4 baseline.
 
 - Information about the dcase20-task4 please visit [github].
-### PLG-MT model
+### Couple Learning model
 
 More info in the [PLG-MT_run] folder.
 
