@@ -52,7 +52,7 @@ PLG-MT model path : `stored_data/models/trained_PLG-MT_model`
 | CRNN              |    28.14 |   33.56  | 
 | + Mean Teacher(Baseline)                 |  32.39   |  37.12   | 
 | + PLG                 |  30.04   |  35.26   |
-| + Mean Teacher + PLG                 |   33.93 |  32.4239.18   |
+| + Mean Teacher + PLG                 |   33.93 |  39.18   |
 
 
 ###  EB-F1(%) with different pseudo-lalbels and PLG models
