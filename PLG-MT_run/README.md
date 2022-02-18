@@ -43,6 +43,28 @@ PLG-MT model path : `stored_data/models/trained_PLG-MT_model`
 | PLG-MT                | 33.37%    | 0.6116    | 0.5420    | 0.4398    |
 
 
+## Supplementary experimental results
+
+### EB-F1(%) results with different methods and on different test set
+
+|                       | Validation     | public eval  |
+|-----------------------|----------:|----------:|
+| CRNN              |    28.14 |   33.56  | 
+| + Mean Teacher(Baseline)                 |  32.39   |  37.12   | 
+| + PLG                 |  30.04   |  35.26   |
+| + Mean Teacher + PLG                 |   33.93 |  32.4239.18   |
+
+
+###  EB-F1(%) with different pseudo-lalbels and PLG models
+|                       | FBCRNN     | MT-CRNN  |
+|-----------------------|----------:|----------:|
+| baseline              |    32.39 |   32.39  | 
+| + UPW                 |  33.95   |  30.06   | 
+| + WPS                 |  35.80   |  32.15   |
+| + UPW                 |   37.24   |  32.42   |
+| + UPS + WPS                 |  37.97  | 33.52   |
+| + UPS + WPS + UPW                 | 41.33   |  33.93   |
+
 
 ### References
  - [[1]] L. Delphin-Poulat & C. Plapous, technical report, dcase 2019.
