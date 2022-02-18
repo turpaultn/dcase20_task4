@@ -58,7 +58,7 @@ PLG-MT model path : `stored_data/models/trained_PLG-MT_model`
 ###  EB-F1(%) with different pseudo-lalbels and PLG models
 |                       | FBCRNN     | MT-CRNN  |
 |-----------------------|----------:|----------:|
-| baseline              |    32.39 |   32.39  | 
+| Baseline              |    32.39 |   32.39  | 
 | + UPW                 |  33.95   |  30.06   | 
 | + WPS                 |  35.80   |  32.15   |
 | + UPW                 |   37.24   |  32.42   |
