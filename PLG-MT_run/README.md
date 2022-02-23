@@ -3,10 +3,10 @@
 
 
 ## Training PLG-MT model 
-- open the `config.py` file to confirm parameter of mode is "".
+- open the `config.py` file to confirm parameter of mode is `""`.
 - execute `python MT_train.py`, Complete the training of the baseline model.
 - execute `python PLG_process.py`, Complete the generation of pseudo labels
-- open the `config.py` file to confirm parameter of mode is "_TbS".
+- open the `config.py` file to confirm parameter of mode is `"_TbS"`.
 - execute `python MT_train.py -sm "_TbS"`, Complete the training of the PLG-MT model.
 
 
