@@ -20,7 +20,6 @@ baseline/test/
 tmp/
 features/
 missing_files/
-stored_data/
 validation_durations.tsv
 
 synthetic20*
