@@ -45,7 +45,7 @@ PLG-MT model path : `stored_data/models/trained_PLG-MT_model`
 
 ## Supplementary experimental results
 
-### EB-F1(%) results with different methods and on different test set
+### EB-F1(%) results with different methods on different test set
 
 |                       | Validation     | public eval  |
 |-----------------------|----------:|----------:|
@@ -55,7 +55,7 @@ PLG-MT model path : `stored_data/models/trained_PLG-MT_model`
 | + Mean Teacher + PLG                 |   33.93 |  39.18   |
 
 
-###  EB-F1(%) with different pseudo-lalbels and PLG models
+###  EB-F1(%) with different pseudo-labels and PLG models on validation set
 |                       | FBCRNN     | MT-CRNN  |
 |-----------------------|----------:|----------:|
 | Baseline              |    32.39 |   32.39  | 
