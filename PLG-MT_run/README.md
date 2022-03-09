@@ -25,9 +25,17 @@ python TestModel.py -m "stored_data/MeanTeacher_TbS/model/baseline_best" -g ../d
 
 ## Test result
 
+### Results in paper
 baseline model path : `stored_data/models/trained_baseline_model`
 
 PLG-MT model path : `stored_data/models/trained_PLG-MT_model`
+
+To reproduce the results of the paper run
+
+```bash
+python TestModel.py -m "stored_data/models/trained_PLG-MT_model" -g ../dataset/public_eval/metadata/eval/public.tsv  \
+-ga ../dataset/public_eval/audio/eval/public -s stored_data/mean_teacher_public_test/public_predictions.tsv
+```
 
 
 ###  public set
