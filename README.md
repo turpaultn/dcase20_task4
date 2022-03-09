@@ -3,8 +3,6 @@
 
 - This repository provides the data and source code for sound event detection (SED) task.
 - The improvement of the Couple Learning method is verified on the basis of the dcase20-task4 baseline.
-
-- Information about the dcase20-task4 please visit [github].
 - Information about Couple Learning please visit [paper: Couple Learning for semi-supervised sound event detection].
 
 
