@@ -5,7 +5,7 @@
 - The improvement of the Couple Learning method is verified on the basis of the dcase20-task4 baseline.
 
 - Information about the dcase20-task4 please visit [github].
-- Information about Couple Learning please visit [paper: Couple Learning: Mean Teacher method with pseudo-labels improves semi-supervised deep learning results].
+- Information about Couple Learning please visit [paper: Couple Learning for semi-supervised sound event detection].
 
 
 ### Couple Learning model
@@ -96,7 +96,7 @@ The dataset for sound event detection of DCASE2020 task 4 is composed of:
 [synthetic_dataset]: https://doi.org/10.5281/zenodo.3550598
 [submission_page]: http://dcase.community/challenge2020/submission
 [website]: http://dcase.community/challenge2020/
-[paper: Couple Learning: Mean Teacher method with pseudo-labels improves semi-supervised deep learning results]:https://arxiv.org/abs/2110.05809
+[paper: Couple Learning for semi-supervised sound event detection]:https://arxiv.org/abs/2110.05809
 
 [sed_roc_0_0_100]: figures/sed_baseline/psds_roc_0_0_100.png
 [sed_roc_1_0_100]: figures/sed_baseline/psds_roc_1_0_100.png
