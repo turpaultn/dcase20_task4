@@ -10,7 +10,7 @@
 
 More info in the [PLG-MT_run] folder.
 
-### Reproducing the results
+### Reproducing the results of paper
 See [PLG-MT_run] folder.
 
 ## Dependencies
