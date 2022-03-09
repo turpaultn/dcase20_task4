@@ -25,6 +25,7 @@ python TestModel.py -m "stored_data/MeanTeacher_TbS/model/baseline_best" -g ../d
 
 ### Results in paper
 baseline model path : `stored_data/models/trained_baseline_model`
+
 PLG-MT model path : `stored_data/models/trained_PLG-MT_model`
 
 To reproduce the results of the paper run
