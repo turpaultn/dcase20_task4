@@ -1,8 +1,8 @@
-# PLG-MT method
+# Couple Learning(PLG-MT)
 
 
 
-## Training PLG-MT model 
+## Steps of training  
 - open the `config.py` file to confirm parameter of mode is `""`.
 - execute `python MT_train.py`, Complete the training of the baseline model.
 - execute `python PLG_process.py`, Complete the generation of pseudo labels
@@ -10,7 +10,7 @@
 - execute `python MT_train.py -sm "_TbS"`, Complete the training of the PLG-MT model.
 
 
-## Testing  models
+## Testing 
 ### mean teacher only
 ```bash
 python TestModel.py -m "stored_data/MeanTeacher/model/baseline_best" -g ../dataset/public_eval/metadata/eval/public.tsv  \
@@ -23,11 +23,8 @@ python TestModel.py -m "stored_data/MeanTeacher_TbS/model/baseline_best" -g ../d
 -ga ../dataset/public_eval/audio/eval/public -s stored_data/mean_teacher_public_test/public_predictions.tsv
 ```
 
-## Test result
-
 ### Results in paper
 baseline model path : `stored_data/models/trained_baseline_model`
-
 PLG-MT model path : `stored_data/models/trained_PLG-MT_model`
 
 To reproduce the results of the paper run
@@ -37,6 +34,7 @@ python TestModel.py -m "stored_data/models/trained_PLG-MT_model" -g ../dataset/p
 -ga ../dataset/public_eval/audio/eval/public -s stored_data/mean_teacher_public_test/public_predictions.tsv
 ```
 
+## Test result
 
 ###  public set
 |                       | EB-F1     | PSDS_1    |PSDS_2     |PSDS_3     |
